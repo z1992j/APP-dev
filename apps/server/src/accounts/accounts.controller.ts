@@ -42,7 +42,7 @@ export class AccountsController {
     @Param('id') id: string,
     @Body() dto: UpsertAccountDto,
   ) {
-    return this.svc.update(BigInt(u.teamId), BigInt(id), dto);
+    return this.svc.update(BigInt(u.teamId), BigInt(id), { ...dto });
   }
 
   @Delete(':id')

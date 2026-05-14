@@ -31,3 +31,10 @@ apps/miniprogram/.wechatide
 
 # prisma
 apps/server/prisma/migrations/dev*
+
+# build artifacts
+dist/
+*.tsbuildinfo
+prisma/seed.js
+prisma/seed.js.map
+

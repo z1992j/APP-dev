@@ -71,7 +71,7 @@ export class AiService {
         type: 'text' as const,
         text: b.text,
         ...(b.cache ? { cache_control: { type: 'ephemeral' as const } } : {}),
-      }));
+      })) as Anthropic.TextBlockParam[];
       const userMsg = buildUserMessage(input.topic, input.words, refExcerpt);
 
       let buf = '';
@@ -94,9 +94,10 @@ export class AiService {
           }
         }
         const finalMsg = await stream.finalMessage();
-        inputTokens = finalMsg.usage?.input_tokens ?? 0;
-        cachedTokens = finalMsg.usage?.cache_read_input_tokens ?? 0;
-        outputTokens = finalMsg.usage?.output_tokens ?? 0;
+        const usage = finalMsg.usage as unknown as Record<string, number> | undefined;
+        inputTokens = usage?.input_tokens ?? 0;
+        cachedTokens = usage?.cache_read_input_tokens ?? 0;
+        outputTokens = usage?.output_tokens ?? 0;
 
         const parsed = safeParseJson<WriteResult>(buf);
         yield {
@@ -147,13 +148,14 @@ export class AiService {
       .filter((c) => c.type === 'text')
       .map((c) => (c as { text: string }).text)
       .join('');
+    const usage = msg.usage as unknown as Record<string, number> | undefined;
     await this.recordUsage({
       teamId: input.teamId,
       userId: input.userId,
       kind: 'rewrite',
-      inputTokens: msg.usage?.input_tokens ?? 0,
-      cachedTokens: msg.usage?.cache_read_input_tokens ?? 0,
-      outputTokens: msg.usage?.output_tokens ?? 0,
+      inputTokens: usage?.input_tokens ?? 0,
+      cachedTokens: usage?.cache_read_input_tokens ?? 0,
+      outputTokens: usage?.output_tokens ?? 0,
     });
     return { text: out };
   }

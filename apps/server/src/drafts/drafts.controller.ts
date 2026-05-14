@@ -78,7 +78,7 @@ export class DraftsController {
     @Param('id') id: string,
     @Body() dto: UpsertDraftDto,
   ) {
-    return this.svc.update(BigInt(u.teamId), BigInt(id), dto);
+    return this.svc.update(BigInt(u.teamId), BigInt(id), { ...dto });
   }
 
   @Post(':id/schedule')

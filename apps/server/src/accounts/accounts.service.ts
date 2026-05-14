@@ -1,4 +1,5 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.module';
 
 @Injectable()
@@ -33,7 +34,7 @@ export class AccountsService {
         nickname: data.nickname,
         xhsUrl: data.xhsUrl,
         vertical: data.vertical,
-        persona: data.persona ?? {},
+        persona: (data.persona ?? {}) as Prisma.InputJsonValue,
       },
     });
   }
@@ -42,7 +43,7 @@ export class AccountsService {
     await this.assertOwn(teamId, id);
     return this.prisma.xhsAccount.update({
       where: { id },
-      data,
+      data: data as Prisma.XhsAccountUpdateInput,
     });
   }
 

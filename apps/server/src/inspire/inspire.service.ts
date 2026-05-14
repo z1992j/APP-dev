@@ -61,7 +61,7 @@ export class InspireService {
 每条 ≤30 字。避免敏感品类与极限词。
 输出严格 JSON 数组：["角度1","角度2",...]。不要解释。`,
             cache_control: { type: 'ephemeral' },
-          },
+          } as Anthropic.TextBlockParam,
         ],
         messages: [{ role: 'user', content: `赛道：${v}\n关键词：${q}` }],
       });
