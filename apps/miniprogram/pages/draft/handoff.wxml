@@ -1,0 +1,17 @@
+<view class="page">
+  <view class="card">
+    <view class="big-emoji">📕</view>
+    <view class="title-h">正在准备发布…</view>
+    <view class="checks">
+      <view class="check">{{savedAll ? '✓' : '…'}}  图片已保存到相册</view>
+      <view class="check">{{copied ? '✓' : '…'}}  文案已复制到剪贴板</view>
+      <view class="check">✓  请到桌面打开小红书 → 点底部 + → 图文笔记 → 选图 → 粘贴文案</view>
+    </view>
+    <view class="btn-ghost" bindtap="retryOpen">没自动跳？点这里再试</view>
+  </view>
+
+  <view class="card">
+    <view class="label">发布完后，把笔记链接粘贴回来 ↓</view>
+    <input class="input" placeholder="https://www.xiaohongshu.com/explore/..." bindblur="onPublishedUrl" />
+  </view>
+</view>

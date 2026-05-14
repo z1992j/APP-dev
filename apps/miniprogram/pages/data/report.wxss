@@ -1,0 +1,20 @@
+.label { font-size: 26rpx; color: #8E92A6; margin-bottom: 12rpx; }
+.acct-chips { display: flex; flex-wrap: wrap; gap: 12rpx; margin-bottom: 24rpx; }
+.chip { padding: 12rpx 24rpx; border-radius: 999rpx; background: #F1F3F8; font-size: 26rpx; }
+.chip.active { background: #3A66FF; color: #fff; }
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #ECEEF3;
+}
+.rk { color: #444; font-size: 28rpx; }
+.rv {
+  width: 240rpx;
+  text-align: right;
+  background: #F1F3F8;
+  border-radius: 8rpx;
+  padding: 12rpx 20rpx;
+}

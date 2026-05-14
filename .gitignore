@@ -1,0 +1,33 @@
+# dependencies
+node_modules
+.pnpm-store
+.npm
+
+# build
+dist
+build
+*.tsbuildinfo
+
+# env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea
+.vscode/*
+!.vscode/extensions.json
+
+# weapp
+apps/miniprogram/miniprogram_npm
+apps/miniprogram/.wechatide
+
+# prisma
+apps/server/prisma/migrations/dev*

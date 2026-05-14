@@ -1,0 +1,24 @@
+<view class="page">
+  <view class="card">
+    <view class="label">账号</view>
+    <view class="acct-chips">
+      <view wx:for="{{accounts}}" wx:key="id"
+            class="chip {{selectedAccountId === item.id ? 'active' : ''}}"
+            data-id="{{item.id}}" bindtap="pickAccount">
+        {{item.nickname}}
+      </view>
+    </view>
+
+    <view class="row"><text class="rk">粉丝总数</text><input type="number" class="rv" data-key="followers" bindinput="onMetricInput" /></view>
+    <view class="row"><text class="rk">今日曝光</text><input type="number" class="rv" data-key="impressions" bindinput="onMetricInput" /></view>
+    <view class="row"><text class="rk">今日点赞</text><input type="number" class="rv" data-key="likes" bindinput="onMetricInput" /></view>
+    <view class="row"><text class="rk">今日收藏</text><input type="number" class="rv" data-key="saves" bindinput="onMetricInput" /></view>
+    <view class="row"><text class="rk">今日评论</text><input type="number" class="rv" data-key="comments" bindinput="onMetricInput" /></view>
+    <view class="row"><text class="rk">今日私信</text><input type="number" class="rv" data-key="msgs" bindinput="onMetricInput" /></view>
+    <view class="row"><text class="rk">今日发布</text><input type="number" class="rv" data-key="posts" bindinput="onMetricInput" /></view>
+  </view>
+
+  <view class="card">
+    <view class="btn-primary" bindtap="submit">保存</view>
+  </view>
+</view>

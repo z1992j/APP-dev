@@ -1,0 +1,28 @@
+<view class="page">
+  <view class="card">
+    <view class="label">昵称</view>
+    <input class="input" value="{{nickname}}" data-k="nickname" bindinput="onInput" />
+
+    <view class="label">主页链接（可空）</view>
+    <input class="input" value="{{xhsUrl}}" data-k="xhsUrl" bindinput="onInput" placeholder="https://www.xiaohongshu.com/user/..." />
+
+    <view class="label">赛道</view>
+    <view class="chips">
+      <view wx:for="{{verticals}}" wx:key="*this"
+            class="chip {{vertical === item ? 'active' : ''}}"
+            data-v="{{item}}" bindtap="pick">{{item}}</view>
+    </view>
+
+    <view class="section-title">人设（影响 AI 写作效果）</view>
+
+    <view class="label">城市</view>
+    <input class="input" value="{{persona.city}}" data-k="persona.city" bindinput="onInput" placeholder="上海" />
+
+    <view class="label">自我介绍</view>
+    <textarea class="input ta" value="{{persona.intro}}" data-k="persona.intro" bindinput="onInput" placeholder="25 岁上海打工人，分享性价比通勤穿搭" auto-height></textarea>
+  </view>
+
+  <view class="card">
+    <view class="btn-primary" bindtap="save">保存</view>
+  </view>
+</view>

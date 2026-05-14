@@ -1,0 +1,56 @@
+<view class="page">
+  <view class="card">
+    <view class="status-row">
+      <text class="account">{{accountName}}</text>
+      <text class="save-status">{{saving ? '保存中…' : '已自动保存'}}</text>
+    </view>
+
+    <view class="label">标题</view>
+    <input class="title-input" placeholder="≤20 字，带 emoji 更易爆" value="{{title}}" bindinput="onTitleInput" />
+
+    <view class="label">图片 ({{media.length}}/18)</view>
+    <view class="media-grid">
+      <view wx:for="{{media}}" wx:key="key" class="media-cell">
+        <image src="{{item.url}}" mode="aspectFill" class="media-img"></image>
+        <view class="media-x" data-idx="{{index}}" catchtap="removeImage">×</view>
+      </view>
+      <view wx:if="{{media.length < 18}}" class="media-cell add" bindtap="chooseImages">+</view>
+    </view>
+
+    <view class="label">正文</view>
+    <textarea class="body-input" placeholder="正文……" value="{{body}}" bindinput="onBodyInput" auto-height></textarea>
+  </view>
+
+  <view class="card actions">
+    <view class="btn-ghost" bindtap="runLint">检查违禁词</view>
+    <view class="btn-primary" bindtap="handoff">发布到小红书 →</view>
+  </view>
+
+  <view wx:if="{{status === 'handed_off'}}" class="card">
+    <view class="label">已发布？粘贴小红书笔记链接</view>
+    <input class="input" placeholder="https://www.xiaohongshu.com/explore/..." bindblur="submitPublishedUrl" />
+  </view>
+
+  <!-- Lint Sheet -->
+  <view wx:if="{{showLintPanel}}" class="sheet-mask" bindtap="closeLint">
+    <view class="sheet" catchtap="">
+      <view class="sheet-header">
+        <text>违禁词检查</text>
+        <text class="sheet-x" bindtap="closeLint">×</text>
+      </view>
+      <view wx:if="{{lintLoading}}" class="txt-muted center">检查中…</view>
+      <view wx:elif="{{!violations.length}}" class="txt-muted center">无问题 ✓</view>
+      <view wx:else>
+        <view wx:for="{{violations}}" wx:key="start" class="violation v-{{item.level}}">
+          <view class="v-head">
+            <text class="v-level">{{item.level === 'red' ? '🔴' : item.level === 'yellow' ? '🟡' : '⚪'}}</text>
+            <text class="v-term">"{{item.text}}"</text>
+            <text class="v-cat">{{item.category}}</text>
+          </view>
+          <view wx:if="{{item.suggestion}}" class="v-suggest">建议改为：{{item.suggestion}}</view>
+          <view wx:if="{{item.suggestion}}" class="btn-ghost sm" data-idx="{{index}}" bindtap="applyFix">一键替换</view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>
