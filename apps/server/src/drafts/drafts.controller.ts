@@ -104,12 +104,17 @@ export class DraftsController {
     return this.svc.published(BigInt(u.teamId), BigInt(id), dto.publishedUrl);
   }
 
+  @Post(':id/submit-review')
+  submitReview(@CurrentUser() u: JwtPayload, @Param('id') id: string) {
+    return this.svc.submitReview(BigInt(u.teamId), BigInt(id), BigInt(u.sub));
+  }
+
   @Post(':id/review')
   review(
     @CurrentUser() u: JwtPayload,
     @Param('id') id: string,
     @Body() dto: ReviewDto,
   ) {
-    return this.svc.review(BigInt(u.teamId), BigInt(u.sub), BigInt(id), dto);
+    return this.svc.review(BigInt(u.teamId), BigInt(u.sub), BigInt(id), u.role, dto);
   }
 }

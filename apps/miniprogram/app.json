@@ -11,7 +11,8 @@
     "pages/me/index",
     "pages/me/account-edit",
     "pages/me/billing",
-    "pages/me/login"
+    "pages/me/login",
+    "pages/me/agreement/index"
   ],
   "tabBar": {
     "color": "#999999",

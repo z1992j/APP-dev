@@ -48,6 +48,20 @@ export function request<T = unknown>(
 
 export const Api = {
   wxLogin: (code: string) => request<{ token: string; user: any; team: any }>('POST', '/auth/wx-login', { code }),
+  myTeams: () => request<any[]>('GET', '/auth/teams'),
+  switchTeam: (teamId: string) =>
+    request<{ token: string; team: any }>('POST', '/auth/switch-team', { teamId }),
+
+  // teams
+  currentTeam: () => request<any>('GET', '/teams/current'),
+  listMembers: () => request<any[]>('GET', '/teams/members'),
+  createInvite: (role: string) => request<{ code: string; expiresIn: number }>('POST', '/teams/invites', { role }),
+  acceptInvite: (code: string) => request<any>('POST', '/teams/invites/accept', { code }),
+
+  // drafts: review
+  submitReview: (id: string) => request<any>('POST', `/drafts/${id}/submit-review`),
+  reviewDraft: (id: string, decision: 'approve' | 'reject' | 'comment', comment?: string) =>
+    request<any>('POST', `/drafts/${id}/review`, { decision, comment }),
 
   // accounts
   listAccounts: () => request<any[]>('GET', '/accounts'),

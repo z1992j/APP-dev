@@ -1,4 +1,9 @@
-import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.module';
@@ -87,6 +92,45 @@ export class AuthService {
       team: {
         id: membership.teamId.toString(),
         role: membership.role,
+      },
+    };
+  }
+
+  async myTeams(userId: bigint) {
+    const memberships = await this.prisma.teamMember.findMany({
+      where: { userId },
+      include: { team: { select: { id: true, name: true, plan: true } } },
+      orderBy: { joinedAt: 'asc' },
+    });
+    return memberships.map((m) => ({
+      teamId: m.teamId.toString(),
+      name: m.team.name,
+      plan: m.team.plan,
+      role: m.role,
+      joinedAt: m.joinedAt,
+    }));
+  }
+
+  async switchTeam(userId: bigint, teamId: bigint) {
+    const m = await this.prisma.teamMember.findFirst({
+      where: { userId, teamId },
+      include: { team: { select: { name: true, plan: true } } },
+    });
+    if (!m) {
+      throw new ForbiddenException({ code: 40301, message: '不是该团队成员' });
+    }
+    const token = this.jwt.sign({
+      sub: userId.toString(),
+      teamId: teamId.toString(),
+      role: m.role,
+    });
+    return {
+      token,
+      team: {
+        id: teamId.toString(),
+        name: m.team.name,
+        plan: m.team.plan,
+        role: m.role,
       },
     };
   }

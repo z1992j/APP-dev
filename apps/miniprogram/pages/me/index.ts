@@ -37,6 +37,10 @@ Page({
     wx.navigateTo({ url: '/pages/me/billing' });
   },
 
+  openAgreement() {
+    wx.navigateTo({ url: '/pages/me/agreement/index' });
+  },
+
   signOut() {
     logout();
     this.setData({ user: null, team: null, accounts: [] });

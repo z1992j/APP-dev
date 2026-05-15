@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -125,12 +126,39 @@ export class DraftsService {
     });
   }
 
+  async submitReview(teamId: bigint, id: bigint, authorId: bigint) {
+    const d = await this.get(teamId, id);
+    if (!['draft', 'rejected'].includes(d.status)) {
+      throw new BadRequestException({
+        code: 40001,
+        message: '当前状态不能提交评审',
+      });
+    }
+    await this.prisma.auditLog.create({
+      data: {
+        teamId,
+        actorId: authorId,
+        action: 'draft.submit_review',
+        targetType: 'draft',
+        targetId: d.id,
+      },
+    });
+    return this.prisma.draft.update({
+      where: { id: d.id },
+      data: { status: 'in_review' },
+    });
+  }
+
   async review(
     teamId: bigint,
     reviewerId: bigint,
     id: bigint,
+    role: string,
     dto: { decision: string; comment?: string },
   ) {
+    if (!REVIEWER_ROLES.has(role)) {
+      throw new ForbiddenException({ code: 40301, message: '当前角色无评审权限' });
+    }
     const d = await this.get(teamId, id);
     const review = await this.prisma.draftReview.create({
       data: {
@@ -140,20 +168,29 @@ export class DraftsService {
         comment: dto.comment,
       },
     });
-    if (dto.decision === 'approve') {
+    let nextStatus: string | undefined;
+    if (dto.decision === 'approve') nextStatus = 'approved';
+    else if (dto.decision === 'reject') nextStatus = 'rejected';
+    if (nextStatus) {
       await this.prisma.draft.update({
         where: { id: d.id },
-        data: { status: 'approved' },
+        data: { status: nextStatus },
       });
-    } else if (dto.decision === 'reject') {
-      await this.prisma.draft.update({
-        where: { id: d.id },
-        data: { status: 'draft' },
+      await this.prisma.auditLog.create({
+        data: {
+          teamId,
+          actorId: reviewerId,
+          action: `draft.${dto.decision}`,
+          targetType: 'draft',
+          targetId: d.id,
+        },
       });
     }
     return review;
   }
 }
+
+const REVIEWER_ROLES = new Set(['owner', 'admin', 'reviewer']);
 
 function safeParseUrl(s: string): URL | null {
   try {

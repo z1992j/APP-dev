@@ -1,0 +1,74 @@
+<view class="page">
+  <view class="tabs">
+    <view wx:for="{{tabs}}" wx:key="key"
+          class="tab {{activeTab === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}" bindtap="switchTab">{{item.label}}</view>
+  </view>
+
+  <block wx:if="{{activeTab === 'user'}}">
+    <view class="card doc">
+      <view class="h1">RedMatrix 用户协议</view>
+      <view class="meta">最近更新：2026-05</view>
+
+      <view class="h2">1. 服务说明</view>
+      <view class="p">RedMatrix（"本服务"）是面向小红书博主与团队的内容协作工具。提供选题、AI 写作、违禁词检测、草稿管理、数据填报等功能。本服务不提供自动登录或代用户发布小红书账号的能力，所有发布动作由用户在小红书 App 内手动完成。</view>
+
+      <view class="h2">2. 账号</view>
+      <view class="p">您通过微信账号登录，相关授权、用户标识、昵称、头像由微信开放平台提供。您可随时在「我」中退出登录。</view>
+
+      <view class="h2">3. 您的责任</view>
+      <view class="p">• 您对在本服务中创建的内容负责，不得创作或上传违反《广告法》、《互联网信息服务管理办法》及小红书社区规则的内容。<br/>• 您不得借助本服务进行黑产、刷量、批量虚假账号等违规活动。<br/>• 您应遵守与博主或团队成员之间的协议，本服务记录操作审计日志以备查证。</view>
+
+      <view class="h2">4. 我们的责任</view>
+      <view class="p">我们提供工具但不为内容效果（曝光、转化、商务变现等）作出担保。AI 生成内容可能包含偏差或不准确信息，请您发布前自行复核。</view>
+
+      <view class="h2">5. 终止</view>
+      <view class="p">您可以随时注销账号，注销后您的草稿和数据将在 30 日内删除。我们也保留对违规账号的暂停或终止服务的权利。</view>
+    </view>
+  </block>
+
+  <block wx:if="{{activeTab === 'privacy'}}">
+    <view class="card doc">
+      <view class="h1">隐私政策</view>
+      <view class="meta">最近更新：2026-05</view>
+
+      <view class="h2">1. 我们收集的信息</view>
+      <view class="p">• 微信登录提供的 openid、unionid、昵称、头像。<br/>• 您主动填写的账号档案、人设、文案、图片视频。<br/>• 您的运营数据（粉丝、互动等），仅在您主动填报时收集。<br/>• 系统级日志（IP、设备型号、调用时间）用于安全审计。</view>
+      <view class="p"><text class="bold">我们不收集您的小红书账号密码、Cookie 或任何登录凭证。</text></view>
+
+      <view class="h2">2. 信息用途</view>
+      <view class="p">• 提供选题、AI 写作、数据看板等功能。<br/>• 为团队管理者提供协作所需的成员信息可见性。<br/>• 用于内容安全合规性检查。</view>
+
+      <view class="h2">3. 信息共享</view>
+      <view class="p">我们不会向第三方出售您的信息。在以下情况会共享：<br/>• 您的文案在调用 AI 写作时会传输至 Anthropic 等 AI 服务商进行处理，仅用于本次生成请求。<br/>• 您上传的图片视频存储于腾讯云对象存储。<br/>• 您主动发起的内容安全检测会调用微信 msgSecCheck / imgSecCheck。<br/>• 法律法规要求或政府机关合法要求时。</view>
+
+      <view class="h2">4. 您的权利</view>
+      <view class="p">您可随时：<br/>• 查看与导出您的全部数据（联系客服获取）。<br/>• 删除任意账号档案或草稿。<br/>• 注销账号（数据 30 日内删除）。</view>
+
+      <view class="h2">5. 联系我们</view>
+      <view class="p">隐私问题：privacy@redmatrix.example</view>
+    </view>
+  </block>
+
+  <block wx:if="{{activeTab === 'sub'}}">
+    <view class="card doc">
+      <view class="h1">订阅与退订协议</view>
+      <view class="meta">最近更新：2026-05</view>
+
+      <view class="h2">1. 订阅</view>
+      <view class="p">您可以选择按月或按年订阅个人 Pro / 团队 Starter / 团队 Pro。订阅金额通过微信支付一次性收取，订阅期内您可使用对应套餐功能。</view>
+
+      <view class="h2">2. 自动续费</view>
+      <view class="p">如您开启了自动续费，将在每个订阅期结束前 24 小时自动从微信支付扣款续期。您可随时在「我 > 升级 Pro > 自动续费管理」中关闭。</view>
+
+      <view class="h2">3. 退订</view>
+      <view class="p">• 自订阅之日起 7 天内未使用核心功能可申请全额退款。<br/>• 已使用核心功能（AI 写作 / 数据填报等）后不支持退款，但您可随时关闭自动续费。</view>
+
+      <view class="h2">4. 配额</view>
+      <view class="p">AI 写作按日重置，账号档案配额按订阅期内有效。超额使用按 0.05 元/千 token 累计计费。</view>
+
+      <view class="h2">5. 发票</view>
+      <view class="p">如需开具增值税普通发票，请联系 billing@redmatrix.example。</view>
+    </view>
+  </block>
+</view>

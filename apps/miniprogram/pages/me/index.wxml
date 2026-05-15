@@ -25,6 +25,10 @@
   </view>
 
   <view class="card">
+    <view class="row" bindtap="openAgreement">
+      <text>用户协议 / 隐私政策</text>
+      <text class="arrow">→</text>
+    </view>
     <view class="row" bindtap="signOut">
       <text class="txt-danger">退出登录</text>
     </view>
