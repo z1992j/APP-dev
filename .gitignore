@@ -38,3 +38,8 @@ dist/
 prisma/seed.js
 prisma/seed.js.map
 
+# next.js
+apps/web/.next
+apps/web/out
+apps/web/.next/types
+apps/web/pnpm-lock.yaml
