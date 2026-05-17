@@ -159,6 +159,18 @@ export const Api = {
   aiRewrite: (text: string, instruction: string) =>
     request<{ text: string }>('POST', '/ai/rewrite', { text, instruction }),
 
+  // imitate (Phase 1)
+  imitateParse: (url: string) =>
+    request<{
+      url: string;
+      title?: string;
+      body?: string;
+      author?: string;
+      images: Array<{ src: string; w?: number; h?: number }>;
+      empty?: boolean;
+      hint?: string;
+    }>('POST', '/imitate/parse', { url }),
+
   // data
   reportData: (data: { accountId: string; bucketDate: string; metrics: Record<string, number> }) =>
     request<any>('POST', '/data/report', data),

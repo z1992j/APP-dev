@@ -235,3 +235,72 @@ model AuditLog {
   @@index([teamId, createdAt])
   @@map("audit_log")
 }
+
+// ─── Phase 1: 仿写参考帖缓存 ─────────────────────────────────────────────────
+model RefNote {
+  id          BigInt   @id @default(autoincrement())
+  url         String   @unique
+  fingerprint String
+  title       String?
+  body        String?  @db.Text
+  images      Json     @default("[]")          // [{url, key, w, h, src}]
+  author      String?
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+
+  @@map("ref_note")
+}
+
+// ─── Phase 2 数据模型预留（暂不接 Playwright） ────────────────────────────
+model XhsSession {
+  id            BigInt    @id @default(autoincrement())
+  accountId     BigInt    @unique @map("account_id")
+  storageState  Bytes?    @map("storage_state")        // encrypted Playwright storage
+  userAgent     String?   @map("user_agent")
+  viewport      Json?
+  proxyId       BigInt?   @map("proxy_id")
+  fingerprint   Json      @default("{}")
+  status        String    @default("needs_login")      // active | challenged | banned | needs_login
+  loginAt       DateTime? @map("login_at")
+  lastUsedAt    DateTime? @map("last_used_at")
+  dailyQuota    Json      @default("{\"posts\":3,\"comments\":30,\"dms\":50}") @map("daily_quota")
+  activeWindow  Json      @default("{\"from\":\"09:00\",\"to\":\"22:00\",\"tz\":\"Asia/Shanghai\"}") @map("active_window")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  proxy Proxy? @relation(fields: [proxyId], references: [id])
+
+  @@map("xhs_session")
+}
+
+model Proxy {
+  id            BigInt   @id @default(autoincrement())
+  type          String                                  // residential | datacenter
+  endpoint      String
+  credentials   String?
+  geoCity       String?  @map("geo_city")
+  health        String   @default("healthy")            // healthy | slow | dead
+  lastCheckedAt DateTime? @map("last_checked_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sessions XhsSession[]
+
+  @@map("proxy")
+}
+
+model Job {
+  id          BigInt    @id @default(autoincrement())
+  teamId      BigInt    @map("team_id")
+  accountId   BigInt?   @map("account_id")
+  kind        String                                    // imitate | publish | comment.reply | dm.reply | data.sync
+  payload     Json      @default("{}")
+  status      String    @default("queued")              // queued | running | done | failed | canceled
+  scheduledAt DateTime? @map("scheduled_at")
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  resultRef   String?   @map("result_ref")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([teamId, status, scheduledAt])
+  @@map("job")
+}

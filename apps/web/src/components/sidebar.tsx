@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 const NAV = [
   { href: '/inspire', label: '灵感', icon: '✨' },
   { href: '/write', label: 'AI 写作', icon: '✍️' },
+  { href: '/imitate', label: '一键仿写', icon: '🪄' },
   { href: '/drafts', label: '草稿', icon: '📝' },
   { href: '/data', label: '数据', icon: '📊' },
   { href: '/accounts', label: '账号档案', icon: '👥' },

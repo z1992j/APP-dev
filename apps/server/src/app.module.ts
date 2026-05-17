@@ -12,6 +12,7 @@ import { MediaModule } from './media/media.module';
 import { DataModule } from './data/data.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { HealthModule } from './health/health.module';
+import { ImitateModule } from './imitate/imitate.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { HealthModule } from './health/health.module';
     DataModule,
     SchedulerModule,
     HealthModule,
+    ImitateModule,
   ],
 })
 export class AppModule {}
