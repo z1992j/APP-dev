@@ -41,20 +41,32 @@ export default function AccountsPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {accounts.map((a) => (
-            <Card
-              key={a.id}
-              className="cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => setEditing(a)}
-            >
+            <Card key={a.id} className="hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-semibold">{a.nickname}</div>
+                <button onClick={() => setEditing(a)} className="font-semibold text-left">
+                  {a.nickname}
+                </button>
                 <span className="text-xs px-2 py-0.5 bg-ink-100/60 rounded">
                   {a.vertical ?? '未设置'}
                 </span>
               </div>
               {a.persona?.intro && (
-                <div className="text-sm text-ink-500 line-clamp-2">{a.persona.intro}</div>
+                <div className="text-sm text-ink-500 line-clamp-2 mb-3">{a.persona.intro}</div>
               )}
+              <div className="flex gap-2 pt-2 border-t border-ink-100">
+                <a
+                  href={`/accounts/${a.id}/bind`}
+                  className="text-xs text-brand-500 hover:underline"
+                >
+                  🔗 绑定 / 自动化
+                </a>
+                <button
+                  onClick={() => setEditing(a)}
+                  className="text-xs text-ink-500 hover:text-ink-900"
+                >
+                  ⚙️ 编辑档案
+                </button>
+              </div>
             </Card>
           ))}
         </div>

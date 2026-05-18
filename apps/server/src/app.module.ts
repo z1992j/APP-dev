@@ -13,6 +13,7 @@ import { DataModule } from './data/data.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { HealthModule } from './health/health.module';
 import { ImitateModule } from './imitate/imitate.module';
+import { AutomationModule } from './automation/automation.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { ImitateModule } from './imitate/imitate.module';
     SchedulerModule,
     HealthModule,
     ImitateModule,
+    AutomationModule,
   ],
 })
 export class AppModule {}

@@ -171,6 +171,34 @@ export const Api = {
       hint?: string;
     }>('POST', '/imitate/parse', { url }),
 
+  // automation (Phase 2)
+  autoStatus: (accountId: string) =>
+    request<{
+      status: string;
+      workerHealth: string;
+      port?: number;
+      loginStatus?: { is_logged_in: boolean; username?: string };
+      qrcodeAt?: string;
+      lastUsedAt?: string;
+    }>('GET', `/automation/sessions/${accountId}/status`),
+  autoBind: (accountId: string) =>
+    request<{ isLoggedIn: boolean; img?: string; timeout?: string }>(
+      'POST',
+      `/automation/sessions/${accountId}/bind`,
+    ),
+  autoPoll: (accountId: string) =>
+    request<{ isLoggedIn: boolean; username?: string; workerHealth: string }>(
+      'GET',
+      `/automation/sessions/${accountId}/poll`,
+    ),
+  autoUnbind: (accountId: string) =>
+    request<{ ok: true }>('DELETE', `/automation/sessions/${accountId}`),
+  autoPublish: (draftId: string) =>
+    request<{ status: string; noteUrl?: string }>(
+      'POST',
+      `/automation/drafts/${draftId}/publish`,
+    ),
+
   // data
   reportData: (data: { accountId: string; bucketDate: string; metrics: Record<string, number> }) =>
     request<any>('POST', '/data/report', data),

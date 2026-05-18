@@ -250,21 +250,30 @@ model RefNote {
   @@map("ref_note")
 }
 
-// ─── Phase 2 数据模型预留（暂不接 Playwright） ────────────────────────────
+// ─── Phase 2 数据模型 ──────────────────────────────────────────────────────
 model XhsSession {
   id            BigInt    @id @default(autoincrement())
   accountId     BigInt    @unique @map("account_id")
-  storageState  Bytes?    @map("storage_state")        // encrypted Playwright storage
+  storageState  Bytes?    @map("storage_state")        // legacy, not used with xhs-mcp
   userAgent     String?   @map("user_agent")
   viewport      Json?
   proxyId       BigInt?   @map("proxy_id")
   fingerprint   Json      @default("{}")
-  status        String    @default("needs_login")      // active | challenged | banned | needs_login
+  status        String    @default("needs_login")      // needs_login | qrcode_ready | active | challenged | banned | stopped
   loginAt       DateTime? @map("login_at")
   lastUsedAt    DateTime? @map("last_used_at")
   dailyQuota    Json      @default("{\"posts\":3,\"comments\":30,\"dms\":50}") @map("daily_quota")
   activeWindow  Json      @default("{\"from\":\"09:00\",\"to\":\"22:00\",\"tz\":\"Asia/Shanghai\"}") @map("active_window")
   createdAt     DateTime  @default(now()) @map("created_at")
+
+  // worker lifecycle (xiaohongshu-mcp container)
+  workerContainerId String?  @map("worker_container_id")
+  workerPort        Int?     @map("worker_port")
+  workerHealth      String?  @default("unknown") @map("worker_health")   // healthy | unhealthy | starting | dead
+  workerStartedAt   DateTime? @map("worker_started_at")
+  workerLastSeenAt  DateTime? @map("worker_last_seen_at")
+  qrcodeData        String?  @map("qrcode_data") @db.Text              // data URL of latest login QR
+  qrcodeIssuedAt    DateTime? @map("qrcode_issued_at")
 
   proxy Proxy? @relation(fields: [proxyId], references: [id])
 

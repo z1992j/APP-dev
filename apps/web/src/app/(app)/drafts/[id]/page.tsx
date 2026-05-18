@@ -151,6 +151,18 @@ export default function DraftEditPage({ params }: { params: Promise<{ id: string
     }
   }
 
+  async function autoPublish() {
+    if (!confirm('确认通过自动化容器发布到小红书？\n（消耗今日 1 次发帖配额）')) return;
+    try {
+      const r = await Api.autoPublish(id);
+      toast(`自动发布完成（${r.status}）`, 'success');
+      const fresh = await Api.getDraft(id);
+      setDraft(fresh);
+    } catch (e: any) {
+      toast(e?.message ?? '自动发布失败', 'error');
+    }
+  }
+
   if (!draft) return <div className="text-ink-500">加载中…</div>;
 
   return (
@@ -192,14 +204,17 @@ export default function DraftEditPage({ params }: { params: Promise<{ id: string
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Button variant="ghost" onClick={runLint}>
           🔎 检查违禁词
         </Button>
         <Button variant="outline" onClick={submitForReview}>
           提交审稿
         </Button>
-        <Button onClick={handoff}>发布到小红书 →</Button>
+        <Button variant="outline" onClick={handoff}>
+          手动发布 (跳 creator.xhs)
+        </Button>
+        <Button onClick={autoPublish}>⚡ 自动发布</Button>
       </div>
 
       <Card>

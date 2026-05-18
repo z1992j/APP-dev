@@ -1,0 +1,34 @@
+# Template per-account xiaohongshu-mcp worker.
+# NestJS automation module spawns/stops containers like this dynamically.
+# This file is for manual smoke testing the worker image without the orchestrator.
+#
+# Usage:
+#   ACCOUNT_ID=1 PROXY_URL=http://user:pass@proxy.qg.net:9999 docker compose -f docker-compose.workers.yml up
+#
+# Then hit: curl http://localhost:18001/health
+
+version: '3.9'
+
+services:
+  xhs-mcp-worker:
+    image: xpzouying/xiaohongshu-mcp:latest
+    container_name: xhs-mcp-acc-${ACCOUNT_ID:-test}
+    environment:
+      - XHS_PORT=18060
+      # 青果代理示例（每账号一个独立 IP）：
+      # XHS_PROXY=http://USER:PASS@proxy.ipidea.io:2334
+      - XHS_PROXY=${PROXY_URL:-}
+    ports:
+      - "${WORKER_PORT:-18001}:18060"
+    volumes:
+      - xhs-cookies-${ACCOUNT_ID:-test}:/app/cookies
+      - xhs-assets-${ACCOUNT_ID:-test}:/app/assets
+    restart: unless-stopped
+    labels:
+      - "redmatrix.role=xhs-mcp-worker"
+      - "redmatrix.account_id=${ACCOUNT_ID:-test}"
+    mem_limit: 800m
+
+volumes:
+  xhs-cookies-${ACCOUNT_ID:-test}:
+  xhs-assets-${ACCOUNT_ID:-test}:
