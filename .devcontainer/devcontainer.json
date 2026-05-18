@@ -12,7 +12,8 @@
     "5432": { "label": "Postgres" },
     "6379": { "label": "Redis" }
   },
-  "postCreateCommand": "npm install -g pnpm@10 && bash .devcontainer/setup.sh",
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y tmux && npm install -g pnpm@10 && bash .devcontainer/setup.sh",
+  "postAttachCommand": "bash .devcontainer/dev-up.sh",
   "customizations": {
     "vscode": {
       "extensions": [
