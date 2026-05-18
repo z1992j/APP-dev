@@ -21,15 +21,27 @@
 
 ## 🚀 启动
 
-### 方式一：Codespaces（零配置）
+### 方式一：Codespaces（零配置，推荐快速测试）
 
-仓库右上角 **Code → Codespaces → Create codespace**。`.devcontainer/setup.sh` 会自动安装依赖、起 Postgres+Redis、migrate、灌种子。然后：
+**1. 先在 GitHub 设好 Secret（一次性）**
+
+打开 https://github.com/settings/codespaces → **New secret** → 名字 `DEEPSEEK_API_KEY`、值填你的 DeepSeek key → Repository access 选本仓库。可选：`JWT_SECRET`（不填 setup.sh 也会用 .env.example 里的开发占位）。
+
+**2. 仓库右上角 Code → Codespaces → Create codespace on main**
+
+约 3 分钟后 `.devcontainer/setup.sh` 自动完成：装依赖、起 Postgres+Redis、prisma migrate + seed、注入 Secret。
+
+**3. 在 Codespace 终端里起两个进程**
 
 ```bash
-# 两个 Terminal
-cd apps/server && pnpm dev    # :3000
-cd apps/web    && pnpm dev    # :3001 （Codespaces 自动转发公网预览 URL）
+# Tab 1
+cd apps/server && pnpm dev          # NestJS @ :3000
+
+# Tab 2
+cd apps/web && pnpm dev             # Next.js @ :3001
 ```
+
+VS Code 底部 **PORTS** 标签里 3001 会自动转公网预览 URL（`https://<codespace-name>-3001.app.github.dev`）。点 🌐 图标在浏览器打开 → `/login` → 任意 dev code（如 `dev-alice`）→ 进 `/inspire` 工作台。
 
 ### 方式二：自有服务器拉镜像（推荐生产）
 

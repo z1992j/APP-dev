@@ -3,6 +3,10 @@
 
 const STORAGE_KEY = 'redmatrix:auth';
 
+// 静态导出（GitHub Pages）下没有 Next rewrites，必须打绝对地址；
+// 本机开发 / Docker 内 SSR 模式下 NEXT_PUBLIC_API_BASE 为空，走 /api 由 rewrites 接管。
+const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE ?? '').replace(/\/+$/, '');
+
 export interface AuthState {
   token: string;
   user: { id: string; nickname?: string; avatarUrl?: string };
@@ -37,7 +41,7 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const token = loadAuth()?.token;
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method,
     headers: {
       'Content-Type': 'application/json',
@@ -61,7 +65,7 @@ export async function streamSSE(
   onEvent: (evt: any) => void,
 ): Promise<void> {
   const token = loadAuth()?.token;
-  const res = await fetch(`/api/v1${path}`, {
+  const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
