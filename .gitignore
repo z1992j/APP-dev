@@ -42,4 +42,3 @@ prisma/seed.js.map
 apps/web/.next
 apps/web/out
 apps/web/.next/types
-apps/web/pnpm-lock.yaml
