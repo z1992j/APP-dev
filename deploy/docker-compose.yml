@@ -40,8 +40,9 @@ services:
       JWT_SECRET: ${JWT_SECRET:-change-me}
       WX_APPID: ${WX_APPID}
       WX_SECRET: ${WX_SECRET}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/anthropic}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-pro}
     ports:
       - '3000:3000'
     profiles:

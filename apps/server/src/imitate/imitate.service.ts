@@ -26,8 +26,11 @@ export class ImitateService {
     private readonly cfg: ConfigService,
     private readonly prisma: PrismaService,
   ) {
-    this.anthropic = new Anthropic({ apiKey: cfg.get<string>('ANTHROPIC_API_KEY') ?? '' });
-    this.model = cfg.get<string>('CLAUDE_MODEL') ?? 'claude-sonnet-4-6';
+    this.anthropic = new Anthropic({
+      apiKey: cfg.get<string>('DEEPSEEK_API_KEY') ?? '',
+      baseURL: cfg.get<string>('DEEPSEEK_BASE_URL') ?? 'https://api.deepseek.com/anthropic',
+    });
+    this.model = cfg.get<string>('DEEPSEEK_MODEL') ?? 'deepseek-v4-pro';
   }
 
   async parseUrl(url: string) {
@@ -95,9 +98,10 @@ export class ImitateService {
       const stream = this.anthropic.messages.stream({
         model: this.model,
         max_tokens: 1600,
+        thinking: { type: 'disabled' },
         system,
         messages: [{ role: 'user', content: userMsg }],
-      });
+      } as Anthropic.MessageStreamParams);
       for await (const evt of stream) {
         if (evt.type === 'content_block_delta' && evt.delta.type === 'text_delta') {
           buf += evt.delta.text;
@@ -180,13 +184,16 @@ export class ImitateService {
   }
 
   private async recordUsage(teamId: bigint, userId: bigint, i: number, c: number, o: number) {
-    const costUsd = ((i - c) * 3 + c * 0.3 + o * 15) / 1_000_000;
+    const inP = Number(this.cfg.get('DEEPSEEK_PRICE_INPUT_PER_M') ?? 0.27);
+    const cacheP = Number(this.cfg.get('DEEPSEEK_PRICE_CACHE_PER_M') ?? 0.07);
+    const outP = Number(this.cfg.get('DEEPSEEK_PRICE_OUTPUT_PER_M') ?? 1.1);
+    const costUsd = ((i - c) * inP + c * cacheP + o * outP) / 1_000_000;
     await this.prisma.aiUsage.create({
       data: {
         teamId,
         userId,
         kind: 'imitate',
-        provider: 'anthropic',
+        provider: 'deepseek',
         model: this.model,
         promptTokens: i,
         cachedTokens: c,

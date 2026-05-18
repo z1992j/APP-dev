@@ -46,8 +46,9 @@ jobs:
       DATABASE_URL: postgresql://redmatrix:redmatrix@localhost:5432/redmatrix?schema=public
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-secret-do-not-use-in-prod
-      ANTHROPIC_API_KEY: sk-ant-stub-for-ci
-      CLAUDE_MODEL: claude-sonnet-4-6
+      DEEPSEEK_API_KEY: sk-stub-for-ci
+      DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
+      DEEPSEEK_MODEL: deepseek-v4-pro
       WX_APPID: ci_stub_appid
       WX_SECRET: ci_stub_secret
       NODE_ENV: development

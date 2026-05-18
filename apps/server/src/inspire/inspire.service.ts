@@ -16,9 +16,10 @@ export class InspireService {
     private readonly prisma: PrismaService,
   ) {
     this.anthropic = new Anthropic({
-      apiKey: cfg.get<string>('ANTHROPIC_API_KEY') ?? '',
+      apiKey: cfg.get<string>('DEEPSEEK_API_KEY') ?? '',
+      baseURL: cfg.get<string>('DEEPSEEK_BASE_URL') ?? 'https://api.deepseek.com/anthropic',
     });
-    this.model = cfg.get<string>('CLAUDE_MODEL') ?? 'claude-sonnet-4-6';
+    this.model = cfg.get<string>('DEEPSEEK_MODEL') ?? 'deepseek-v4-pro';
   }
 
   // No data BD source. Returns:
@@ -54,6 +55,7 @@ export class InspireService {
       const msg = await this.anthropic.messages.create({
         model: this.model,
         max_tokens: 600,
+        thinking: { type: 'disabled' },
         system: [
           {
             type: 'text',
@@ -64,7 +66,7 @@ export class InspireService {
           } as Anthropic.TextBlockParam,
         ],
         messages: [{ role: 'user', content: `赛道：${v}\n关键词：${q}` }],
-      });
+      } as Anthropic.MessageCreateParamsNonStreaming);
       const text = msg.content
         .filter((c) => c.type === 'text')
         .map((c) => (c as { text: string }).text)

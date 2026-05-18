@@ -1,7 +1,7 @@
 # Top-level docker-compose for production (or staging) — uses prebuilt images from GHCR.
 # Run on your server:
 #   1) Save ghcr token: docker login ghcr.io -u <user>
-#   2) Set .env in this directory with: ANTHROPIC_API_KEY, JWT_SECRET, WX_APPID, WX_SECRET, IMAGE_TAG=latest
+#   2) Set .env in this directory with: DEEPSEEK_API_KEY, JWT_SECRET, WX_APPID, WX_SECRET, IMAGE_TAG=latest
 #   3) docker compose -f deploy/docker-compose.prod.yml up -d
 #
 # Mounts /var/run/docker.sock so the server can spawn per-account xhs-mcp workers.
@@ -49,8 +49,9 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       WX_APPID: ${WX_APPID}
       WX_SECRET: ${WX_SECRET}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
-      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/anthropic}
+      DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-pro}
       WORKER_HOST: ${WORKER_HOST:-127.0.0.1}
       XHS_MCP_IMAGE: ${XHS_MCP_IMAGE:-xpzouying/xiaohongshu-mcp:latest}
     ports:

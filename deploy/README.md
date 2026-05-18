@@ -10,7 +10,7 @@ docker compose up -d postgres redis
 
 ```bash
 cd ../apps/server
-cp .env.example .env             # 填入 ANTHROPIC_API_KEY 等
+cp .env.example .env             # 填入 DEEPSEEK_API_KEY 等
 pnpm install
 pnpm prisma migrate dev
 pnpm prisma db seed

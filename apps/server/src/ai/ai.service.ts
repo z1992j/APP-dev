@@ -25,9 +25,10 @@ export class AiService {
     private readonly prisma: PrismaService,
   ) {
     this.client = new Anthropic({
-      apiKey: cfg.get<string>('ANTHROPIC_API_KEY') ?? '',
+      apiKey: cfg.get<string>('DEEPSEEK_API_KEY') ?? '',
+      baseURL: cfg.get<string>('DEEPSEEK_BASE_URL') ?? 'https://api.deepseek.com/anthropic',
     });
-    this.model = cfg.get<string>('CLAUDE_MODEL') ?? 'claude-sonnet-4-6';
+    this.model = cfg.get<string>('DEEPSEEK_MODEL') ?? 'deepseek-v4-pro';
   }
 
   async *write(input: {
@@ -83,9 +84,12 @@ export class AiService {
         const stream = this.client.messages.stream({
           model: this.model,
           max_tokens: 1500,
+          // DeepSeek-v4-pro 默认开启 extended thinking，会让首 token 延迟 5~10s。
+          // 小红书写作场景不需要展示推理过程，关掉以提速并降本。
+          thinking: { type: 'disabled' },
           system,
           messages: [{ role: 'user', content: userMsg }],
-        });
+        } as Anthropic.MessageStreamParams);
 
         for await (const evt of stream) {
           if (evt.type === 'content_block_delta' && evt.delta.type === 'text_delta') {
@@ -136,6 +140,7 @@ export class AiService {
     const msg = await this.client.messages.create({
       model: this.model,
       max_tokens: 800,
+      thinking: { type: 'disabled' },
       system: REWRITE_SYSTEM,
       messages: [
         {
@@ -143,7 +148,7 @@ export class AiService {
           content: `改写要求：${input.instruction}\n\n原文：\n${input.text}`,
         },
       ],
-    });
+    } as Anthropic.MessageCreateParamsNonStreaming);
     const out = msg.content
       .filter((c) => c.type === 'text')
       .map((c) => (c as { text: string }).text)
@@ -192,19 +197,22 @@ export class AiService {
     cachedTokens: number;
     outputTokens: number;
   }) {
-    // Pricing (Claude Sonnet 4.6, 2026-05): input $3/M, cache hit $0.30/M, output $15/M.
-    // costCents = USD * 100 * exchange_rate; here we keep USD cents.
+    // DeepSeek-v4-pro pricing TBD: 这里先按 deepseek 公开档（约 input $0.27/M、cache $0.07/M、output $1.10/M）估算。
+    // 实际值在 DEEPSEEK_PRICE_* 环境变量中可覆盖。
+    const inP = Number(this.cfg.get('DEEPSEEK_PRICE_INPUT_PER_M') ?? 0.27);
+    const cacheP = Number(this.cfg.get('DEEPSEEK_PRICE_CACHE_PER_M') ?? 0.07);
+    const outP = Number(this.cfg.get('DEEPSEEK_PRICE_OUTPUT_PER_M') ?? 1.1);
     const costUsd =
-      ((d.inputTokens - d.cachedTokens) * 3 +
-        d.cachedTokens * 0.3 +
-        d.outputTokens * 15) /
+      ((d.inputTokens - d.cachedTokens) * inP +
+        d.cachedTokens * cacheP +
+        d.outputTokens * outP) /
       1_000_000;
     await this.prisma.aiUsage.create({
       data: {
         teamId: d.teamId,
         userId: d.userId,
         kind: d.kind,
-        provider: 'anthropic',
+        provider: 'deepseek',
         model: this.model,
         promptTokens: d.inputTokens,
         cachedTokens: d.cachedTokens,

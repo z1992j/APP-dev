@@ -38,7 +38,9 @@ docker login ghcr.io -u <your-github-user>
 
 cd deploy
 cat > .env <<EOF
-ANTHROPIC_API_KEY=sk-ant-...
+DEEPSEEK_API_KEY=sk-...
+DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
+DEEPSEEK_MODEL=deepseek-v4-pro
 JWT_SECRET=$(openssl rand -hex 32)
 PG_PASSWORD=$(openssl rand -hex 16)
 WX_APPID=                           # 网页 OAuth 暂未必填
@@ -76,7 +78,7 @@ Dev 模式（无微信 AppID 也可）：
 | 登录 / JWT / 多团队切换 | ✅ | dev 模式 + 微信 OAuth 框架 |
 | 账号档案 + 人设 + 套餐配额 | ✅ | persona 字段喂 AI |
 | 灵感选题 | ✅ | LLM 生成 10 角度 + 粘贴 XHS 链接 oembed |
-| AI 写作 | ✅ | Claude 流式 + prompt caching + 多账号 fan-out |
+| AI 写作 | ✅ | DeepSeek-v4-pro 流式（Anthropic SDK + 兼容网关）+ 多账号 fan-out |
 | **AI 仿写工作台** | ✅ | 粘 URL → 解析 → 按锁定提示词改写 → 草稿 |
 | 违禁词检测 | ✅ | Trie + 64 种子词 + 三层框架 |
 | 草稿 + 状态机 + 排期 | ✅ | draft → in_review → scheduled → handed_off → published |
