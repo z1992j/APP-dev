@@ -9,15 +9,17 @@ WORKDIR /app
 RUN corepack enable
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-RUN pnpm exec prisma generate && pnpm run build
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN pnpm run build
 
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache openssl
+ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/dist ./dist
-COPY --from=build /app/prisma ./prisma
-COPY package.json ./
-EXPOSE 3000
-CMD ["node", "dist/main.js"]
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/public ./public
+COPY --from=build /app/package.json ./
+COPY --from=build /app/next.config.ts ./
+EXPOSE 3001
+CMD ["npx", "next", "start", "-p", "3001"]

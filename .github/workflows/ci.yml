@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server:
+    name: Server (NestJS) - build + e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: redmatrix
+          POSTGRES_PASSWORD: redmatrix
+          POSTGRES_DB: redmatrix
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U redmatrix"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: apps/server
+
+    env:
+      DATABASE_URL: postgresql://redmatrix:redmatrix@localhost:5432/redmatrix?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-secret-do-not-use-in-prod
+      ANTHROPIC_API_KEY: sk-ant-stub-for-ci
+      CLAUDE_MODEL: claude-sonnet-4-6
+      WX_APPID: ci_stub_appid
+      WX_SECRET: ci_stub_secret
+      NODE_ENV: development
+      PORT: 3000
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Grant CREATEDB to redmatrix
+        run: |
+          PGPASSWORD=redmatrix psql -h localhost -U redmatrix -d redmatrix \
+            -c "ALTER USER redmatrix CREATEDB;"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: apps/server/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Prisma generate
+        run: pnpm exec prisma generate
+
+      - name: Prisma migrate
+        run: pnpm exec prisma migrate deploy
+
+      - name: Seed lint words
+        run: pnpm exec prisma db seed
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Start server
+        run: |
+          nohup node dist/main.js > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          for i in $(seq 1 30); do
+            if curl -sSf http://localhost:3000/api/v1/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "::error::server did not become ready"
+          cat /tmp/server.log
+          exit 1
+
+      - name: E2E (28 assertions)
+        run: bash test/e2e.test.sh
+
+      - name: Server logs (always)
+        if: always()
+        run: tail -120 /tmp/server.log || true
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then kill "$(cat /tmp/server.pid)" 2>/dev/null || true; fi
+
+  web:
+    name: Web (Next.js) - typecheck + build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Type check
+        run: pnpm run typecheck
+      - name: Build
+        env:
+          NEXT_PUBLIC_API_BASE: http://localhost:3000
+        run: pnpm run build
+
+  worker-image:
+    name: xhs-mcp Worker image smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Pull worker image
+        run: docker pull xpzouying/xiaohongshu-mcp:latest
+
+      - name: Start worker (no proxy, throwaway)
+        run: |
+          docker run -d \
+            --name xhs-mcp-ci \
+            -p 18001:18060 \
+            -e XHS_PORT=18060 \
+            --memory=800m \
+            xpzouying/xiaohongshu-mcp:latest
+
+      - name: Wait for health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -sSf http://127.0.0.1:18001/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          echo "::error::worker did not become healthy"
+          docker logs xhs-mcp-ci
+          exit 1
+
+      - name: Smoke check login-status
+        run: |
+          curl -sS http://127.0.0.1:18001/api/v1/login/status | tee /tmp/login.json
+          grep -q '"is_logged_in"' /tmp/login.json
+
+      - name: Worker logs (last 80)
+        if: always()
+        run: docker logs --tail 80 xhs-mcp-ci || true
+
+      - name: Tear down
+        if: always()
+        run: docker rm -f xhs-mcp-ci || true
