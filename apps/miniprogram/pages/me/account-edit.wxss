@@ -1,7 +1,0 @@
-.label { font-size: 26rpx; color: #8E92A6; margin: 24rpx 0 12rpx; }
-.input { background: #F1F3F8; border-radius: 12rpx; padding: 20rpx 24rpx; font-size: 28rpx; }
-.input.ta { min-height: 120rpx; }
-.chips { display: flex; flex-wrap: wrap; gap: 12rpx; }
-.chip { padding: 12rpx 24rpx; border-radius: 999rpx; background: #F1F3F8; font-size: 26rpx; color: #444; }
-.chip.active { background: #3A66FF; color: #fff; }
-.section-title { font-size: 28rpx; font-weight: 600; margin-top: 32rpx; }

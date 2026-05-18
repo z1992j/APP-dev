@@ -1,9 +1,0 @@
-<view class="page">
-  <view wx:for="{{plans}}" wx:key="key" class="card">
-    <view class="plan-title">{{item.title}}</view>
-    <view class="plan-price">{{item.price}}</view>
-    <view wx:for="{{item.features}}" wx:for-item="f" wx:key="*this" class="plan-feat">✓ {{f}}</view>
-    <view class="btn-primary" data-k="{{item.key}}" bindtap="upgrade">立即升级</view>
-  </view>
-  <view class="card txt-muted small">续费与退订请查看《订阅协议》，AI 用量按月重置。</view>
-</view>
