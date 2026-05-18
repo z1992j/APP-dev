@@ -1,0 +1,37 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { PrismaModule } from './prisma.module';
+import { AuthModule } from './auth/auth.module';
+import { TeamsModule } from './teams/teams.module';
+import { AccountsModule } from './accounts/accounts.module';
+import { DraftsModule } from './drafts/drafts.module';
+import { AiModule } from './ai/ai.module';
+import { LintModule } from './lint/lint.module';
+import { InspireModule } from './inspire/inspire.module';
+import { MediaModule } from './media/media.module';
+import { DataModule } from './data/data.module';
+import { SchedulerModule } from './scheduler/scheduler.module';
+import { HealthModule } from './health/health.module';
+import { ImitateModule } from './imitate/imitate.module';
+import { AutomationModule } from './automation/automation.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    AuthModule,
+    TeamsModule,
+    AccountsModule,
+    DraftsModule,
+    AiModule,
+    LintModule,
+    InspireModule,
+    MediaModule,
+    DataModule,
+    SchedulerModule,
+    HealthModule,
+    ImitateModule,
+    AutomationModule,
+  ],
+})
+export class AppModule {}

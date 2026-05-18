@@ -1,0 +1,52 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: redmatrix
+      POSTGRES_PASSWORD: redmatrix
+      POSTGRES_DB: redmatrix
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U redmatrix']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+
+  server:
+    build:
+      context: ../apps/server
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://redmatrix:redmatrix@postgres:5432/redmatrix?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      WX_APPID: ${WX_APPID}
+      WX_SECRET: ${WX_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+    ports:
+      - '3000:3000'
+    profiles:
+      - app
+
+volumes:
+  postgres_data:
+  redis_data:

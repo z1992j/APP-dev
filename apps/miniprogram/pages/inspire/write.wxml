@@ -1,0 +1,63 @@
+<view class="page">
+  <view class="card">
+    <view class="label">主题</view>
+    <textarea class="topic-input" placeholder="想写什么？比如：春日通勤穿搭，预算 500" value="{{topic}}" bindinput="onTopicInput" auto-height></textarea>
+
+    <view class="label">发给哪个账号？</view>
+    <view class="account-list">
+      <view wx:for="{{accounts}}" wx:key="id"
+            class="account-chip {{selectedAccountIds.indexOf(item.id) >= 0 ? 'active' : ''}}"
+            data-id="{{item.id}}" bindtap="toggleAccount">
+        {{item.nickname}}{{item.vertical ? '(' + item.vertical + ')' : ''}}
+      </view>
+    </view>
+
+    <view class="label">风格</view>
+    <view class="tag-row">
+      <view wx:for="{{styles}}" wx:key="*this"
+            class="tag {{style === item ? 'active' : ''}}"
+            data-style="{{item}}" bindtap="pickStyle">{{item}}</view>
+    </view>
+
+    <view class="label">字数</view>
+    <view class="tag-row">
+      <view wx:for="{{wordsOptions}}" wx:key="*this"
+            class="tag {{words === item ? 'active' : ''}}"
+            data-words="{{item}}" bindtap="pickWords">{{item}}</view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="btn-primary" bindtap="generate" disabled="{{generating}}">
+      {{generating ? '生成中…' : '⚡ 生成'}}
+    </view>
+  </view>
+
+  <view wx:for="{{results}}" wx:key="accountId" class="card result-card">
+    <view class="result-header">
+      <text class="result-account">{{item.nickname}}</text>
+      <text class="result-status">{{item.done ? '完成' : '生成中…'}}</text>
+    </view>
+
+    <block wx:if="{{item.result}}">
+      <view class="label">标题候选</view>
+      <view wx:for="{{item.result.titles}}" wx:for-item="t" wx:for-index="ti" wx:key="*this"
+            class="title-option {{item.selectedTitleIndex === ti ? 'active' : ''}}"
+            data-idx="{{index}}" data-t="{{ti}}" bindtap="switchTitle">
+        {{t}}
+      </view>
+
+      <view class="label">正文</view>
+      <view class="body-preview">{{item.result.body}}</view>
+
+      <view class="label">Hashtag</view>
+      <view class="hashtags">
+        <text wx:for="{{item.result.hashtags}}" wx:for-item="h" wx:key="*this" class="tag">{{h}}</text>
+      </view>
+
+      <view class="btn-primary" data-idx="{{index}}" bindtap="saveAsDraft">保存到草稿 →</view>
+    </block>
+
+    <view wx:else class="streaming">{{item.rawBuffer}}</view>
+  </view>
+</view>

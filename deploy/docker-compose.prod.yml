@@ -1,0 +1,73 @@
+# Top-level docker-compose for production (or staging) — uses prebuilt images from GHCR.
+# Run on your server:
+#   1) Save ghcr token: docker login ghcr.io -u <user>
+#   2) Set .env in this directory with: ANTHROPIC_API_KEY, JWT_SECRET, WX_APPID, WX_SECRET, IMAGE_TAG=latest
+#   3) docker compose -f deploy/docker-compose.prod.yml up -d
+#
+# Mounts /var/run/docker.sock so the server can spawn per-account xhs-mcp workers.
+
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: redmatrix
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-redmatrix}
+      POSTGRES_DB: redmatrix
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U redmatrix']
+      interval: 10s
+      retries: 6
+    ports:
+      - '127.0.0.1:5432:5432'
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - '127.0.0.1:6379:6379'
+
+  server:
+    image: ghcr.io/${GH_OWNER:-z1992j}/redmatrix-server:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://redmatrix:${PG_PASSWORD:-redmatrix}@postgres:5432/redmatrix?schema=public
+      REDIS_URL: redis://redis:6379
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET}
+      WX_APPID: ${WX_APPID}
+      WX_SECRET: ${WX_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-4-6}
+      WORKER_HOST: ${WORKER_HOST:-127.0.0.1}
+      XHS_MCP_IMAGE: ${XHS_MCP_IMAGE:-xpzouying/xiaohongshu-mcp:latest}
+    ports:
+      - '3000:3000'
+    volumes:
+      # Required so the automation module can spawn per-account xhs-mcp containers
+      - /var/run/docker.sock:/var/run/docker.sock
+
+  web:
+    image: ghcr.io/${GH_OWNER:-z1992j}/redmatrix-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on: [server]
+    environment:
+      NEXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:3000}
+    ports:
+      - '3001:3001'
+
+volumes:
+  postgres_data:
+  redis_data:

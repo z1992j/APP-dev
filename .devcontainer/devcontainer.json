@@ -1,0 +1,30 @@
+{
+  "name": "RedMatrix Dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:20-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "forwardPorts": [3000, 3001, 5432, 6379, 18001, 18002, 18003],
+  "portsAttributes": {
+    "3000": { "label": "NestJS API" },
+    "3001": { "label": "Next.js Web", "onAutoForward": "openPreview" },
+    "5432": { "label": "Postgres" },
+    "6379": { "label": "Redis" }
+  },
+  "postCreateCommand": "npm install -g pnpm@10 && bash .devcontainer/setup.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "Prisma.prisma",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+        "dbaeumer.vscode-eslint"
+      ],
+      "settings": {
+        "editor.formatOnSave": false
+      }
+    }
+  },
+  "remoteUser": "node"
+}

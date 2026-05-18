@@ -1,0 +1,46 @@
+.filter-row { display: flex; gap: 16rpx; padding: 16rpx 24rpx; background: #fff; }
+.filter-chip {
+  padding: 12rpx 24rpx;
+  border-radius: 20rpx;
+  background: #F1F3F8;
+  color: #444;
+  font-size: 26rpx;
+}
+.filter-chip.active { background: #3A66FF; color: #fff; }
+
+.empty { text-align: center; padding: 80rpx 40rpx; }
+.empty-title { color: #8E92A6; margin-bottom: 32rpx; }
+
+.draft-card .row.top { display: flex; justify-content: space-between; }
+.status-tag {
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  background: #F1F3F8;
+  color: #444;
+}
+.status-tag.status-draft     { background: #EFF1F8; }
+.status-tag.status-scheduled { background: #FFF3D6; color: #B97F00; }
+.status-tag.status-handed_off{ background: #E6ECFF; color: #2A4ECC; }
+.status-tag.status-published { background: #DFF7E5; color: #0F9B43; }
+.account { color: #8E92A6; font-size: 22rpx; }
+
+.title { font-size: 30rpx; font-weight: 600; margin: 16rpx 0; }
+.body-preview { color: #555; font-size: 26rpx; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+.fab {
+  position: fixed;
+  right: 40rpx;
+  bottom: 80rpx;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: #3A66FF;
+  color: #fff;
+  font-size: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6rpx 24rpx rgba(58, 102, 255, 0.4);
+}
+.center { text-align: center; padding: 32rpx; }

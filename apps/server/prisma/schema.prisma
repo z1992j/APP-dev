@@ -1,0 +1,315 @@
+// RedMatrix - PostgreSQL schema
+// Reflects DDL in docs/design/p0-detailed-design.md §3
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         BigInt   @id @default(autoincrement())
+  openid     String   @unique
+  unionid    String?
+  phone      String?
+  nickname   String?
+  avatarUrl  String?  @map("avatar_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  ownedTeams   Team[]         @relation("TeamOwner")
+  memberships  TeamMember[]
+  drafts       Draft[]
+  reviews      DraftReview[]
+  reportTokens SubscribeToken[]
+
+  @@map("app_user")
+}
+
+model Team {
+  id               BigInt   @id @default(autoincrement())
+  name             String
+  ownerId          BigInt   @map("owner_id")
+  plan             String   @default("free") // free | personal | starter | pro | enterprise
+  seats            Int      @default(1)
+  currentPeriodEnd DateTime? @map("current_period_end")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  owner   User         @relation("TeamOwner", fields: [ownerId], references: [id])
+  members TeamMember[]
+  accounts XhsAccount[]
+  drafts  Draft[]
+  inspirePool InspirePool[]
+  dataPoints DataPoint[]
+  audits  AuditLog[]
+
+  @@map("team")
+}
+
+model TeamMember {
+  teamId   BigInt   @map("team_id")
+  userId   BigInt   @map("user_id")
+  role     String   // owner | admin | editor | reviewer | viewer
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  team Team @relation(fields: [teamId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@id([teamId, userId])
+  @@map("team_member")
+}
+
+model XhsAccount {
+  id        BigInt   @id @default(autoincrement())
+  teamId    BigInt   @map("team_id")
+  nickname  String
+  xhsUrl    String?  @map("xhs_url")
+  vertical  String?
+  persona   Json     @default("{}")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  team    Team    @relation(fields: [teamId], references: [id])
+  drafts  Draft[]
+  dataPoints DataPoint[]
+
+  @@index([teamId])
+  @@map("xhs_account")
+}
+
+model Draft {
+  id            BigInt    @id @default(autoincrement())
+  teamId        BigInt    @map("team_id")
+  accountId     BigInt?   @map("account_id")
+  authorId      BigInt?   @map("author_id")
+  kind          String    // image | video
+  title         String?
+  body          String?
+  media         Json      @default("[]")
+  hashtags      String[]  @default([])
+  status        String    @default("draft")
+  scheduleAt    DateTime? @map("schedule_at")
+  handedOffAt   DateTime? @map("handed_off_at")
+  publishedAt   DateTime? @map("published_at")
+  publishedUrl  String?   @map("published_url")
+  aiMeta        Json      @default("{}") @map("ai_meta")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  team     Team          @relation(fields: [teamId], references: [id])
+  account  XhsAccount?   @relation(fields: [accountId], references: [id])
+  author   User?         @relation(fields: [authorId], references: [id])
+  reviews  DraftReview[]
+  dataPoints DataPoint[]
+
+  @@index([teamId, status])
+  @@index([accountId])
+  @@map("draft")
+}
+
+model DraftReview {
+  id         BigInt   @id @default(autoincrement())
+  draftId    BigInt   @map("draft_id")
+  reviewerId BigInt?  @map("reviewer_id")
+  decision   String   // approve | reject | comment
+  comment    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  draft    Draft @relation(fields: [draftId], references: [id])
+  reviewer User? @relation(fields: [reviewerId], references: [id])
+
+  @@map("draft_review")
+}
+
+model InspireNote {
+  id          BigInt   @id @default(autoincrement())
+  source      String   // llm | oembed | user
+  sourceId    String   @map("source_id")
+  fingerprint String   @unique
+  payload     Json
+  vertical    String?
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+  expiresAt   DateTime? @map("expires_at")
+
+  pools InspirePool[]
+
+  @@index([vertical])
+  @@map("inspire_note")
+}
+
+model InspirePool {
+  id           BigInt   @id @default(autoincrement())
+  teamId       BigInt   @map("team_id")
+  userId       BigInt?  @map("user_id")
+  noteFp       String   @map("note_fp")
+  noteSnapshot Json     @map("note_snapshot")
+  addedAt      DateTime @default(now()) @map("added_at")
+
+  team Team        @relation(fields: [teamId], references: [id])
+  note InspireNote @relation(fields: [noteFp], references: [fingerprint])
+
+  @@map("inspire_pool")
+}
+
+model LintWord {
+  id          BigInt   @id @default(autoincrement())
+  term        String
+  patternType String   @map("pattern_type") // exact | regex | llm
+  category    String
+  level       String   // red | yellow | info
+  suggestion  String?
+  enabled     Boolean  @default(true)
+  version     Int      @default(1)
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@unique([term, patternType])
+  @@index([enabled])
+  @@map("lint_word")
+}
+
+model DataPoint {
+  id         BigInt   @id @default(autoincrement())
+  teamId     BigInt   @map("team_id")
+  accountId  BigInt?  @map("account_id")
+  draftId    BigInt?  @map("draft_id")
+  bucketDate DateTime @map("bucket_date") @db.Date
+  source     String   // user | oembed | csv
+  metrics    Json
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  team    Team        @relation(fields: [teamId], references: [id])
+  account XhsAccount? @relation(fields: [accountId], references: [id])
+  draft   Draft?      @relation(fields: [draftId], references: [id])
+
+  @@unique([accountId, bucketDate, source])
+  @@index([teamId, bucketDate])
+  @@map("data_point")
+}
+
+model AiUsage {
+  id            BigInt   @id @default(autoincrement())
+  teamId        BigInt?  @map("team_id")
+  userId        BigInt?  @map("user_id")
+  kind          String   // write | rewrite | lint_llm | inspire
+  provider      String
+  model         String
+  promptTokens  Int      @default(0) @map("prompt_tokens")
+  cachedTokens  Int      @default(0) @map("cached_tokens")
+  outputTokens  Int      @default(0) @map("output_tokens")
+  costCents     Int      @default(0) @map("cost_cents")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([teamId, createdAt])
+  @@map("ai_usage")
+}
+
+model SubscribeToken {
+  id          BigInt    @id @default(autoincrement())
+  userId      BigInt    @map("user_id")
+  templateId  String    @map("template_id")
+  consumedAt  DateTime? @map("consumed_at")
+  grantedAt   DateTime  @default(now()) @map("granted_at")
+  consumedFor Json?     @map("consumed_for")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([userId, templateId])
+  @@map("subscribe_token")
+}
+
+model AuditLog {
+  id         BigInt   @id @default(autoincrement())
+  teamId     BigInt?  @map("team_id")
+  actorId    BigInt?  @map("actor_id")
+  action     String
+  targetType String?  @map("target_type")
+  targetId   BigInt?  @map("target_id")
+  meta       Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  team Team? @relation(fields: [teamId], references: [id])
+
+  @@index([teamId, createdAt])
+  @@map("audit_log")
+}
+
+// ─── Phase 1: 仿写参考帖缓存 ─────────────────────────────────────────────────
+model RefNote {
+  id          BigInt   @id @default(autoincrement())
+  url         String   @unique
+  fingerprint String
+  title       String?
+  body        String?  @db.Text
+  images      Json     @default("[]")          // [{url, key, w, h, src}]
+  author      String?
+  fetchedAt   DateTime @default(now()) @map("fetched_at")
+
+  @@map("ref_note")
+}
+
+// ─── Phase 2 数据模型 ──────────────────────────────────────────────────────
+model XhsSession {
+  id            BigInt    @id @default(autoincrement())
+  accountId     BigInt    @unique @map("account_id")
+  storageState  Bytes?    @map("storage_state")        // legacy, not used with xhs-mcp
+  userAgent     String?   @map("user_agent")
+  viewport      Json?
+  proxyId       BigInt?   @map("proxy_id")
+  fingerprint   Json      @default("{}")
+  status        String    @default("needs_login")      // needs_login | qrcode_ready | active | challenged | banned | stopped
+  loginAt       DateTime? @map("login_at")
+  lastUsedAt    DateTime? @map("last_used_at")
+  dailyQuota    Json      @default("{\"posts\":3,\"comments\":30,\"dms\":50}") @map("daily_quota")
+  activeWindow  Json      @default("{\"from\":\"09:00\",\"to\":\"22:00\",\"tz\":\"Asia/Shanghai\"}") @map("active_window")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  // worker lifecycle (xiaohongshu-mcp container)
+  workerContainerId String?  @map("worker_container_id")
+  workerPort        Int?     @map("worker_port")
+  workerHealth      String?  @default("unknown") @map("worker_health")   // healthy | unhealthy | starting | dead
+  workerStartedAt   DateTime? @map("worker_started_at")
+  workerLastSeenAt  DateTime? @map("worker_last_seen_at")
+  qrcodeData        String?  @map("qrcode_data") @db.Text              // data URL of latest login QR
+  qrcodeIssuedAt    DateTime? @map("qrcode_issued_at")
+
+  proxy Proxy? @relation(fields: [proxyId], references: [id])
+
+  @@map("xhs_session")
+}
+
+model Proxy {
+  id            BigInt   @id @default(autoincrement())
+  type          String                                  // residential | datacenter
+  endpoint      String
+  credentials   String?
+  geoCity       String?  @map("geo_city")
+  health        String   @default("healthy")            // healthy | slow | dead
+  lastCheckedAt DateTime? @map("last_checked_at")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  sessions XhsSession[]
+
+  @@map("proxy")
+}
+
+model Job {
+  id          BigInt    @id @default(autoincrement())
+  teamId      BigInt    @map("team_id")
+  accountId   BigInt?   @map("account_id")
+  kind        String                                    // imitate | publish | comment.reply | dm.reply | data.sync
+  payload     Json      @default("{}")
+  status      String    @default("queued")              // queued | running | done | failed | canceled
+  scheduledAt DateTime? @map("scheduled_at")
+  startedAt   DateTime? @map("started_at")
+  finishedAt  DateTime? @map("finished_at")
+  attempts    Int       @default(0)
+  lastError   String?   @map("last_error")
+  resultRef   String?   @map("result_ref")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@index([teamId, status, scheduledAt])
+  @@map("job")
+}
