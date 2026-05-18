@@ -12,6 +12,7 @@ const NAV = [
   { href: '/write', label: 'AI 写作', icon: '✍️' },
   { href: '/imitate', label: '一键仿写', icon: '🪄' },
   { href: '/drafts', label: '草稿', icon: '📝' },
+  { href: '/comments', label: '评论', icon: '💬' },
   { href: '/data', label: '数据', icon: '📊' },
   { href: '/accounts', label: '账号档案', icon: '👥' },
   { href: '/team', label: '团队', icon: '🏢' },

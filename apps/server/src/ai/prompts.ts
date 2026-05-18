@@ -1,6 +1,7 @@
-// Prompt templates for Claude (see docs/design/p0-detailed-design.md §5)
+// Prompt templates shared across ai / imitate / inspire services.
 // Each block is shaped to be cache-friendly: vertical knowledge + persona +
 // style are static across many requests, while topic/ref are dynamic.
+// Currently fed to DeepSeek-v4-pro via the Anthropic-compatible gateway.
 
 export function verticalKnowledge(vertical: string | null | undefined): string {
   const v = vertical ?? '通用';

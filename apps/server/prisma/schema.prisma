@@ -313,3 +313,47 @@ model Job {
   @@index([teamId, status, scheduledAt])
   @@map("job")
 }
+
+// ─── Phase 3-A: 评论 / 私信 ────────────────────────────────────────────────
+model XhsComment {
+  id          BigInt    @id @default(autoincrement())
+  teamId      BigInt    @map("team_id")
+  accountId   BigInt    @map("account_id")
+  noteUrl     String    @map("note_url")
+  noteId      String    @map("note_id")
+  commentId   String    @unique @map("comment_id")     // 小红书侧 comment id
+  parentId    String?   @map("parent_id")
+  authorName  String    @map("author_name")
+  authorId    String    @map("author_id")
+  content     String    @db.Text
+  likedCount  Int       @default(0) @map("liked_count")
+  publishedAt DateTime  @map("published_at")
+  fetchedAt   DateTime  @default(now()) @map("fetched_at")
+
+  status      String    @default("new")                 // new | replied | ignored | flagged
+  reply       String?
+  repliedAt   DateTime? @map("replied_at")
+  ruleId      BigInt?   @map("rule_id")
+
+  @@index([teamId, status, fetchedAt])
+  @@index([accountId, status])
+  @@map("xhs_comment")
+}
+
+model CommentRule {
+  id         BigInt   @id @default(autoincrement())
+  teamId     BigInt   @map("team_id")
+  accountId  BigInt?  @map("account_id")               // null = 团队全局
+  name       String
+  triggers   String[] @default([])                     // 关键词数组，任一命中即触发
+  replyMode  String   @default("template") @map("reply_mode")   // template | ai
+  template   String?
+  aiPersona  Json?    @map("ai_persona")
+  enabled    Boolean  @default(true)
+  priority   Int      @default(0)                      // 高优先级先匹配
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([teamId, enabled, priority])
+  @@map("comment_rule")
+}

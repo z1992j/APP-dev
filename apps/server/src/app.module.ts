@@ -14,6 +14,8 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { HealthModule } from './health/health.module';
 import { ImitateModule } from './imitate/imitate.module';
 import { AutomationModule } from './automation/automation.module';
+import { QueueModule } from './queue/queue.module';
+import { CommentsModule } from './comments/comments.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { AutomationModule } from './automation/automation.module';
     HealthModule,
     ImitateModule,
     AutomationModule,
+    QueueModule,
+    CommentsModule,
   ],
 })
 export class AppModule {}

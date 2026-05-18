@@ -175,6 +175,40 @@ export const Api = {
       hint?: string;
     }>('POST', '/imitate/parse', { url }),
 
+  // comments (Phase 3-A)
+  listComments: (params: { status?: string; accountId?: string; cursor?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.status) q.set('status', params.status);
+    if (params.accountId) q.set('accountId', params.accountId);
+    if (params.cursor) q.set('cursor', params.cursor);
+    const qs = q.toString();
+    return request<{ items: any[]; nextCursor: string | null }>(
+      'GET', `/comments${qs ? `?${qs}` : ''}`,
+    );
+  },
+  commentStats: () => request<Record<string, number>>('GET', '/comments/stats'),
+  triggerCommentSweep: (accountId?: string) =>
+    request<{ queued: number }>('POST', '/comments/sweep', { accountId }),
+  replyComment: (id: string, text: string) =>
+    request<{ queued: boolean }>('POST', `/comments/${id}/reply`, { text }),
+  ignoreComment: (id: string) =>
+    request<any>('POST', `/comments/${id}/ignore`),
+  autoReplyComment: (id: string) =>
+    request<{ matched: boolean; ruleId?: string }>('POST', `/comments/${id}/auto-reply`),
+  listRules: () => request<any[]>('GET', '/comment-rules'),
+  createRule: (data: {
+    name: string;
+    triggers: string[];
+    replyMode: 'template' | 'ai';
+    template?: string;
+    accountId?: string;
+    priority?: number;
+  }) => request<any>('POST', '/comment-rules', data),
+  updateRule: (id: string, data: any) =>
+    request<any>('PUT', `/comment-rules/${id}`, data),
+  deleteRule: (id: string) =>
+    request<any>('DELETE', `/comment-rules/${id}`),
+
   // automation (Phase 2)
   autoStatus: (accountId: string) =>
     request<{
