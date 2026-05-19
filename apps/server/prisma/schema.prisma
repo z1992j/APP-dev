@@ -2,7 +2,9 @@
 // Reflects DDL in docs/design/p0-detailed-design.md §3
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // 同时 target 本机（开发）+ alpine OpenSSL 3 / 1.1（Docker prod & legacy）+ debian-slim
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl", "debian-openssl-3.0.x"]
 }
 
 datasource db {
