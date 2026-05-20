@@ -14,10 +14,13 @@ RUN pnpm exec prisma generate && pnpm run build
 FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache openssl
+# openssl: Prisma 运行时依赖；netcat-openbsd: entrypoint 等 Postgres
+RUN apk add --no-cache openssl netcat-openbsd
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/prisma ./prisma
 COPY package.json ./
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

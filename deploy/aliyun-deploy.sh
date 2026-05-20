@@ -191,7 +191,8 @@ services:
     image: redmatrix-web-local:latest
 EOF
   cd deploy
-  docker compose -f docker-compose.prod.yml -f docker-compose.build.yml --env-file .env build server web
+  # --no-cache 保证 Dockerfile / schema.prisma 改动一定重新生效
+  docker compose -f docker-compose.prod.yml -f docker-compose.build.yml --env-file .env build --no-cache server web
   ok "构建完成"
   cd ..
 fi
