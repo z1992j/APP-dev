@@ -14,6 +14,10 @@ build
 .env.*.local
 !.env.example
 
+# Claude Code local config (commonly contains API keys allowlisted for bash)
+.claude/settings.local.json
+.claude/worktrees/
+
 # logs
 *.log
 npm-debug.log*
