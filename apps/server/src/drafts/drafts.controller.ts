@@ -55,8 +55,14 @@ export class DraftsController {
     @Query('status') status?: string,
     @Query('accountId') accountId?: string,
     @Query('cursor') cursor?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.svc.list(BigInt(u.teamId), { status, accountId, cursor });
+    return this.svc.list(BigInt(u.teamId), {
+      status,
+      accountId,
+      cursor,
+      limit: limit !== undefined ? Number(limit) : undefined,
+    });
   }
 
   @Get(':id')

@@ -30,8 +30,9 @@ export class InspireController {
   async search(
     @Query('q') q: string,
     @Query('vertical') vertical?: string,
+    @Query('limit') limit?: string,
   ) {
-    return this.svc.search(q, vertical);
+    return this.svc.search(q, vertical, limit !== undefined ? Number(limit) : undefined);
   }
 
   @Get('note/:fp')

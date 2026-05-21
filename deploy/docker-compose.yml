@@ -33,11 +33,15 @@ services:
       redis:
         condition: service_started
     environment:
-      NODE_ENV: production
+      # Note: top-level deploy compose runs in production mode by default;
+      # set NODE_ENV=development in your shell when running locally if you
+      # don't want CORS / JWT prod fail-fasts to kick in.
+      NODE_ENV: ${NODE_ENV:-production}
       DATABASE_URL: postgresql://redmatrix:redmatrix@postgres:5432/redmatrix?schema=public
       REDIS_URL: redis://redis:6379
       PORT: 3000
       JWT_SECRET: ${JWT_SECRET:-change-me}
+      WEB_ORIGIN: ${WEB_ORIGIN:-*}
       WX_APPID: ${WX_APPID}
       WX_SECRET: ${WX_SECRET}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}

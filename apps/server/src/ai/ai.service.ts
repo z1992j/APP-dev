@@ -7,6 +7,18 @@ import {
   buildUserMessage,
   REWRITE_SYSTEM,
 } from './prompts';
+import { ErrCode } from '../common/errors';
+import { pickUsage } from '../common/llm-usage';
+import { safeParseJsonObject } from '../common/json';
+import { AiUsageRecorder } from '../common/ai-usage.recorder';
+import { EventQueue } from '../common/event-queue';
+import { withRetry } from './llm-client';
+
+type WriteEvent =
+  | { type: 'account.start'; accountId: string; nickname: string }
+  | { type: 'delta'; accountId: string; text: string }
+  | { type: 'account.done'; accountId: string; result: WriteResult | null }
+  | { type: 'account.error'; accountId: string; message: string };
 
 interface WriteResult {
   titles: string[];
@@ -23,6 +35,7 @@ export class AiService {
   constructor(
     private readonly cfg: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly usage: AiUsageRecorder,
   ) {
     this.client = new Anthropic({
       apiKey: cfg.get<string>('DEEPSEEK_API_KEY') ?? '',
@@ -46,7 +59,7 @@ export class AiService {
       where: { id: { in: input.accountIds }, teamId: input.teamId },
     });
     if (accounts.length === 0) {
-      throw new ForbiddenException({ code: 40301, message: '未找到账号档案' });
+      throw new ForbiddenException({ code: ErrCode.ACCOUNT_NOT_IN_TEAM, message: '未找到账号档案' });
     }
 
     let refExcerpt: string | undefined;
@@ -60,72 +73,79 @@ export class AiService {
       }
     }
 
-    // Fan-out: one streaming generation per account
-    for (const account of accounts) {
-      yield { type: 'account.start', accountId: account.id.toString(), nickname: account.nickname };
-      const { systemBlocks } = buildSystem(
-        account.vertical,
-        (account.persona as Record<string, unknown>) ?? {},
-        input.style,
-      );
-      const system = systemBlocks.map((b) => ({
-        type: 'text' as const,
-        text: b.text,
-        ...(b.cache ? { cache_control: { type: 'ephemeral' as const } } : {}),
-      })) as Anthropic.TextBlockParam[];
-      const userMsg = buildUserMessage(input.topic, input.words, refExcerpt);
+    // Fan-out: stream all accounts in parallel; merge into one SSE channel.
+    // PRD §5.3 target: 5 accounts ≤ 15s — serial fan-out blew past that.
+    const queue = new EventQueue<WriteEvent>();
+    const tasks = accounts.map((account) => this.runOneAccount(account, input, refExcerpt, queue));
+    Promise.allSettled(tasks).finally(() => queue.close());
 
-      let buf = '';
-      let inputTokens = 0;
-      let cachedTokens = 0;
-      let outputTokens = 0;
+    let evt: WriteEvent | null;
+    while ((evt = await queue.next()) !== null) {
+      yield evt;
+    }
+  }
 
-      try {
-        const stream = this.client.messages.stream({
-          model: this.model,
-          max_tokens: 1500,
-          // DeepSeek-v4-pro 默认开启 extended thinking，会让首 token 延迟 5~10s。
-          // 小红书写作场景不需要展示推理过程，关掉以提速并降本。
-          thinking: { type: 'disabled' },
-          system,
-          messages: [{ role: 'user', content: userMsg }],
-        } as Anthropic.MessageStreamParams);
+  private async runOneAccount(
+    account: { id: bigint; nickname: string; vertical: string | null; persona: unknown },
+    input: { teamId: bigint; userId: bigint; topic: string; words: number; style: string },
+    refExcerpt: string | undefined,
+    q: EventQueue<WriteEvent>,
+  ): Promise<void> {
+    const accountId = account.id.toString();
+    q.push({ type: 'account.start', accountId, nickname: account.nickname });
 
-        for await (const evt of stream) {
-          if (evt.type === 'content_block_delta' && evt.delta.type === 'text_delta') {
-            buf += evt.delta.text;
-            yield { type: 'delta', accountId: account.id.toString(), text: evt.delta.text };
-          }
+    const { systemBlocks } = buildSystem(
+      account.vertical,
+      (account.persona as Record<string, unknown>) ?? {},
+      input.style,
+    );
+    const system = systemBlocks.map((b) => ({
+      type: 'text' as const,
+      text: b.text,
+      ...(b.cache ? { cache_control: { type: 'ephemeral' as const } } : {}),
+    })) as Anthropic.TextBlockParam[];
+    const userMsg = buildUserMessage(input.topic, input.words, refExcerpt);
+
+    let buf = '';
+    let stats = { input: 0, cached: 0, output: 0 };
+    try {
+      // TODO(H6): streaming retries are tricky because we've already emitted
+      // deltas to the client. For now we surface the failure as account.error;
+      // a future improvement is to buffer deltas, retry on 5xx, and only
+      // flush once the stream commits.
+      const stream = this.client.messages.stream({
+        model: this.model,
+        max_tokens: 1500,
+        // DeepSeek-v4-pro 默认开启 extended thinking,会让首 token 延迟 5~10s。
+        thinking: { type: 'disabled' },
+        system,
+        messages: [{ role: 'user', content: userMsg }],
+      } as Anthropic.MessageStreamParams);
+
+      for await (const evt of stream) {
+        if (evt.type === 'content_block_delta' && evt.delta.type === 'text_delta') {
+          buf += evt.delta.text;
+          q.push({ type: 'delta', accountId, text: evt.delta.text });
         }
-        const finalMsg = await stream.finalMessage();
-        const usage = finalMsg.usage as unknown as Record<string, number> | undefined;
-        inputTokens = usage?.input_tokens ?? 0;
-        cachedTokens = usage?.cache_read_input_tokens ?? 0;
-        outputTokens = usage?.output_tokens ?? 0;
-
-        const parsed = safeParseJson<WriteResult>(buf);
-        yield {
-          type: 'account.done',
-          accountId: account.id.toString(),
-          result: parsed,
-        };
-      } catch (e) {
-        this.log.error(`AI write failed for account ${account.id}: ${(e as Error).message}`);
-        yield {
-          type: 'account.error',
-          accountId: account.id.toString(),
-          message: '生成失败，请重试',
-        };
-      } finally {
-        await this.recordUsage({
-          teamId: input.teamId,
-          userId: input.userId,
-          kind: 'write',
-          inputTokens,
-          cachedTokens,
-          outputTokens,
-        });
       }
+      const finalMsg = await stream.finalMessage();
+      stats = pickUsage(finalMsg.usage);
+
+      const parsed = safeParseJsonObject<WriteResult>(buf);
+      q.push({ type: 'account.done', accountId, result: parsed });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      this.log.error(`AI write failed for account ${accountId}: ${msg}`);
+      q.push({ type: 'account.error', accountId, message: '生成失败，请重试' });
+    } finally {
+      await this.usage.record({
+        teamId: input.teamId,
+        userId: input.userId,
+        kind: 'write',
+        provider: 'deepseek',
+        model: this.model,
+        stats,
+      });
     }
   }
 
@@ -137,30 +157,33 @@ export class AiService {
     accountId?: bigint;
   }) {
     await this.assertQuota(input.teamId, input.userId);
-    const msg = await this.client.messages.create({
-      model: this.model,
-      max_tokens: 800,
-      thinking: { type: 'disabled' },
-      system: REWRITE_SYSTEM,
-      messages: [
-        {
-          role: 'user',
-          content: `改写要求：${input.instruction}\n\n原文：\n${input.text}`,
-        },
-      ],
-    } as Anthropic.MessageCreateParamsNonStreaming);
+    const msg = await withRetry(
+      () =>
+        this.client.messages.create({
+          model: this.model,
+          max_tokens: 800,
+          thinking: { type: 'disabled' },
+          system: REWRITE_SYSTEM,
+          messages: [
+            {
+              role: 'user',
+              content: `改写要求：${input.instruction}\n\n原文：\n${input.text}`,
+            },
+          ],
+        } as Anthropic.MessageCreateParamsNonStreaming),
+      this.log,
+    );
     const out = msg.content
       .filter((c) => c.type === 'text')
       .map((c) => (c as { text: string }).text)
       .join('');
-    const usage = msg.usage as unknown as Record<string, number> | undefined;
-    await this.recordUsage({
+    await this.usage.record({
       teamId: input.teamId,
       userId: input.userId,
       kind: 'rewrite',
-      inputTokens: usage?.input_tokens ?? 0,
-      cachedTokens: usage?.cache_read_input_tokens ?? 0,
-      outputTokens: usage?.output_tokens ?? 0,
+      provider: 'deepseek',
+      model: this.model,
+      stats: pickUsage(msg.usage),
     });
     return { text: out };
   }
@@ -183,54 +206,10 @@ export class AiService {
     });
     if (usedToday >= limit) {
       throw new ForbiddenException({
-        code: 40901,
+        code: ErrCode.QUOTA_EXCEEDED,
         message: `今日 AI 写作已用完（${limit} 次），升级套餐解锁更多`,
       });
     }
   }
 
-  private async recordUsage(d: {
-    teamId: bigint;
-    userId: bigint;
-    kind: string;
-    inputTokens: number;
-    cachedTokens: number;
-    outputTokens: number;
-  }) {
-    // DeepSeek-v4-pro pricing TBD: 这里先按 deepseek 公开档（约 input $0.27/M、cache $0.07/M、output $1.10/M）估算。
-    // 实际值在 DEEPSEEK_PRICE_* 环境变量中可覆盖。
-    const inP = Number(this.cfg.get('DEEPSEEK_PRICE_INPUT_PER_M') ?? 0.27);
-    const cacheP = Number(this.cfg.get('DEEPSEEK_PRICE_CACHE_PER_M') ?? 0.07);
-    const outP = Number(this.cfg.get('DEEPSEEK_PRICE_OUTPUT_PER_M') ?? 1.1);
-    const costUsd =
-      ((d.inputTokens - d.cachedTokens) * inP +
-        d.cachedTokens * cacheP +
-        d.outputTokens * outP) /
-      1_000_000;
-    await this.prisma.aiUsage.create({
-      data: {
-        teamId: d.teamId,
-        userId: d.userId,
-        kind: d.kind,
-        provider: 'deepseek',
-        model: this.model,
-        promptTokens: d.inputTokens,
-        cachedTokens: d.cachedTokens,
-        outputTokens: d.outputTokens,
-        costCents: Math.round(costUsd * 100),
-      },
-    });
-  }
-}
-
-function safeParseJson<T>(s: string): T | null {
-  // Find first { and last }
-  const start = s.indexOf('{');
-  const end = s.lastIndexOf('}');
-  if (start === -1 || end === -1) return null;
-  try {
-    return JSON.parse(s.slice(start, end + 1)) as T;
-  } catch {
-    return null;
-  }
 }

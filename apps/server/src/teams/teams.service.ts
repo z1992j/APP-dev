@@ -2,23 +2,32 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import Redis from 'ioredis';
 import { PrismaService } from '../prisma.module';
+import { ErrCode } from '../common/errors';
+import { REDIS_CLIENT } from '../common/redis.module';
 
-const INVITE_TTL_MS = 7 * 86400 * 1000;
+const INVITE_TTL_SEC = 7 * 86400;
+const INVITE_KEY_PREFIX = 'redmatrix:invite:';
+
+interface InvitePayload {
+  teamId: string;
+  role: string;
+  inviterId: string;
+  note?: string;
+}
 
 @Injectable()
 export class TeamsService {
-  // in-process cache; production move to Redis
-  private invites = new Map<
-    string,
-    { teamId: bigint; role: string; inviterId: bigint; createdAt: number; note?: string }
-  >();
-
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(REDIS_CLIENT) private readonly redis: Redis,
+  ) {}
 
   async current(teamId: bigint) {
     const team = await this.prisma.team.findUnique({
@@ -50,43 +59,63 @@ export class TeamsService {
     const usedSeats = await this.prisma.teamMember.count({ where: { teamId } });
     if (usedSeats >= seatLimit) {
       throw new ForbiddenException({
-        code: 40901,
+        code: ErrCode.QUOTA_EXCEEDED,
         message: `团队席位已满（${seatLimit}），升级套餐解锁更多`,
       });
     }
-    // 6-char alphanumeric code
-    const code = randomBytes(4).toString('base64url').replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
-    this.invites.set(code, { teamId, role, inviterId, createdAt: Date.now(), note });
-    this.gcInvites();
-    return { code, role, expiresIn: INVITE_TTL_MS / 1000 };
+    // 6-char alphanumeric code; collision after 36^6 ≈ 2.2B is acceptable
+    const code = randomBytes(4)
+      .toString('base64url')
+      .replace(/[^a-zA-Z0-9]/g, '')
+      .slice(0, 6)
+      .toUpperCase();
+    const payload: InvitePayload = {
+      teamId: teamId.toString(),
+      role,
+      inviterId: inviterId.toString(),
+      note,
+    };
+    await this.redis.set(
+      INVITE_KEY_PREFIX + code,
+      JSON.stringify(payload),
+      'EX',
+      INVITE_TTL_SEC,
+    );
+    return { code, role, expiresIn: INVITE_TTL_SEC };
   }
 
   async acceptInvite(userId: bigint, code: string) {
     const upper = code.trim().toUpperCase();
-    const inv = this.invites.get(upper);
-    if (!inv) throw new NotFoundException({ code: 40401, message: '邀请码无效或已过期' });
-    if (Date.now() - inv.createdAt > INVITE_TTL_MS) {
-      this.invites.delete(upper);
-      throw new BadRequestException({ code: 40001, message: '邀请码已过期' });
+    const raw = await this.redis.get(INVITE_KEY_PREFIX + upper);
+    if (!raw) {
+      throw new NotFoundException({ code: ErrCode.INVITE_INVALID, message: '邀请码无效或已过期' });
     }
+    let inv: InvitePayload;
+    try {
+      inv = JSON.parse(raw) as InvitePayload;
+    } catch {
+      throw new BadRequestException({ code: ErrCode.BAD_INPUT, message: '邀请码格式损坏' });
+    }
+    const inviteTeamId = BigInt(inv.teamId);
+    const inviterId = BigInt(inv.inviterId);
     const existing = await this.prisma.teamMember.findFirst({
-      where: { teamId: inv.teamId, userId },
+      where: { teamId: inviteTeamId, userId },
     });
     if (existing) {
-      throw new ConflictException({ code: 40901, message: '已是该团队成员' });
+      throw new ConflictException({ code: ErrCode.ALREADY_MEMBER, message: '已是该团队成员' });
     }
     const member = await this.prisma.teamMember.create({
-      data: { teamId: inv.teamId, userId, role: inv.role },
+      data: { teamId: inviteTeamId, userId, role: inv.role },
     });
-    this.invites.delete(upper);
+    await this.redis.del(INVITE_KEY_PREFIX + upper);
     await this.prisma.auditLog.create({
       data: {
-        teamId: inv.teamId,
-        actorId: inv.inviterId,
+        teamId: inviteTeamId,
+        actorId: inviterId,
         action: 'team.invite_accepted',
         targetType: 'user',
         targetId: userId,
-        meta: { role: inv.role },
+        meta: { role: inv.role, ...(inv.note ? { note: inv.note } : {}) },
       },
     });
     return member;
@@ -122,12 +151,6 @@ export class TeamsService {
     return { ok: true };
   }
 
-  private gcInvites() {
-    const cutoff = Date.now() - INVITE_TTL_MS;
-    for (const [code, inv] of this.invites) {
-      if (inv.createdAt < cutoff) this.invites.delete(code);
-    }
-  }
 }
 
 const SEAT_LIMITS: Record<string, number> = {

@@ -3,11 +3,24 @@ import { ConfigService } from '@nestjs/config';
 import { createHash } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { PrismaService } from '../prisma.module';
+import { ErrCode } from '../common/errors';
+import { clampLimit } from '../common/pagination';
+import { safeParseJsonArray } from '../common/json';
+import { withRetry } from '../ai/llm-client';
+import { Logger } from '@nestjs/common';
 
 const ALLOWED_HOSTS = ['xiaohongshu.com', 'xhslink.com', 'www.xiaohongshu.com'];
+const MAX_QUERY_LEN = 80;
+// Strip ASCII control chars (incl. \n / \t / NUL) which can be used to
+// inject extra instructions into the LLM prompt.
+function sanitizeQuery(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/[\x00-\x1f\x7f]/g, ' ').trim().slice(0, MAX_QUERY_LEN);
+}
 
 @Injectable()
 export class InspireService {
+  private readonly log = new Logger('InspireService');
   private readonly anthropic: Anthropic;
   private readonly model: string;
 
@@ -25,20 +38,23 @@ export class InspireService {
   // No data BD source. Returns:
   // 1) LLM-generated topic angles (10 items) for the keyword + vertical
   // 2) Plus any user-submitted oembed notes cached in inspire_note for this vertical
-  async search(q: string, vertical?: string) {
-    if (!q?.trim()) {
-      throw new BadRequestException({ code: 40001, message: '请输入关键词' });
+  async search(q: string, vertical?: string, limit?: number) {
+    const cleanQ = sanitizeQuery(q ?? '');
+    if (!cleanQ) {
+      throw new BadRequestException({ code: ErrCode.BAD_INPUT, message: '请输入关键词' });
     }
+    const cleanVertical = vertical ? sanitizeQuery(vertical) : undefined;
+    const take = clampLimit(limit, 10);
     const userNotes = await this.prisma.inspireNote.findMany({
       where: {
-        vertical: vertical ?? undefined,
+        vertical: cleanVertical ?? undefined,
         source: { in: ['oembed', 'user'] },
       },
       orderBy: { fetchedAt: 'desc' },
-      take: 10,
+      take,
     });
 
-    const angles = await this.generateAngles(q, vertical);
+    const angles = await this.generateAngles(cleanQ, cleanVertical);
     return {
       angles: angles.map((text, i) => ({ id: `angle-${i}`, text, source: 'llm' })),
       userNotes: userNotes.map((n) => ({
@@ -52,31 +68,33 @@ export class InspireService {
   private async generateAngles(q: string, vertical?: string): Promise<string[]> {
     const v = vertical ?? '通用';
     try {
-      const msg = await this.anthropic.messages.create({
-        model: this.model,
-        max_tokens: 600,
-        thinking: { type: 'disabled' },
-        system: [
-          {
-            type: 'text',
-            text: `你是小红书选题策划。针对关键词，列 10 个值得做的选题角度。
+      const msg = await withRetry(
+        () =>
+          this.anthropic.messages.create({
+            model: this.model,
+            max_tokens: 600,
+            thinking: { type: 'disabled' },
+            system: [
+              {
+                type: 'text',
+                text: `你是小红书选题策划。针对关键词，列 10 个值得做的选题角度。
 每条 ≤30 字。避免敏感品类与极限词。
 输出严格 JSON 数组：["角度1","角度2",...]。不要解释。`,
-            cache_control: { type: 'ephemeral' },
-          } as Anthropic.TextBlockParam,
-        ],
-        messages: [{ role: 'user', content: `赛道：${v}\n关键词：${q}` }],
-      } as Anthropic.MessageCreateParamsNonStreaming);
+                cache_control: { type: 'ephemeral' },
+              } as Anthropic.TextBlockParam,
+            ],
+            messages: [{ role: 'user', content: `赛道：${v}\n关键词：${q}` }],
+          } as Anthropic.MessageCreateParamsNonStreaming),
+        this.log,
+      );
       const text = msg.content
         .filter((c) => c.type === 'text')
         .map((c) => (c as { text: string }).text)
         .join('');
-      const start = text.indexOf('[');
-      const end = text.lastIndexOf(']');
-      if (start === -1 || end === -1) return [];
-      const arr = JSON.parse(text.slice(start, end + 1));
-      return Array.isArray(arr) ? arr.map((x) => String(x)).slice(0, 10) : [];
-    } catch {
+      const arr = safeParseJsonArray<unknown>(text);
+      return arr ? arr.map((x) => String(x)).slice(0, 10) : [];
+    } catch (e: unknown) {
+      this.log.warn(`generateAngles fallback: ${e instanceof Error ? e.message : String(e)}`);
       return [];
     }
   }
@@ -85,7 +103,7 @@ export class InspireService {
     const u = safeParseUrl(url);
     if (!u || !ALLOWED_HOSTS.includes(u.hostname)) {
       throw new BadRequestException({
-        code: 40001,
+        code: ErrCode.INVALID_LINK,
         message: '请粘贴 xiaohongshu.com 或 xhslink.com 的链接',
       });
     }

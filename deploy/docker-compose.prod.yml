@@ -46,7 +46,8 @@ services:
       DATABASE_URL: postgresql://redmatrix:${PG_PASSWORD:-redmatrix}@postgres:5432/redmatrix?schema=public
       REDIS_URL: redis://redis:6379
       PORT: 3000
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env}
+      WEB_ORIGIN: ${WEB_ORIGIN:?WEB_ORIGIN must be set in .env (comma-separated)}
       WX_APPID: ${WX_APPID}
       WX_SECRET: ${WX_SECRET}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}

@@ -7,6 +7,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from '../prisma.module';
+import { ErrCode } from '../common/errors';
 import axios from 'axios';
 
 interface Code2SessionResp {
@@ -117,7 +118,7 @@ export class AuthService {
       include: { team: { select: { name: true, plan: true } } },
     });
     if (!m) {
-      throw new ForbiddenException({ code: 40301, message: '不是该团队成员' });
+      throw new ForbiddenException({ code: ErrCode.NOT_TEAM_MEMBER, message: '不是该团队成员' });
     }
     const token = this.jwt.sign({
       sub: userId.toString(),

@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.module';
+import { ErrCode } from '../common/errors';
 
 @Injectable()
 export class AccountsService {
@@ -24,7 +25,7 @@ export class AccountsService {
     const limit = QUOTA[team.plan] ?? 1;
     if (count >= limit) {
       throw new ForbiddenException({
-        code: 40901,
+        code: ErrCode.QUOTA_EXCEEDED,
         message: `账号档案已达 ${limit} 个上限，升级套餐解锁更多`,
       });
     }
@@ -56,8 +57,10 @@ export class AccountsService {
   }
 
   private async assertOwn(teamId: bigint, id: bigint) {
-    const a = await this.prisma.xhsAccount.findUnique({ where: { id } });
-    if (!a || a.teamId !== teamId) throw new NotFoundException('account not found');
+    const a = await this.prisma.xhsAccount.findFirst({
+      where: { id, teamId },
+    });
+    if (!a) throw new NotFoundException('account not found');
   }
 }
 

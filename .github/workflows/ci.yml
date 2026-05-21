@@ -46,6 +46,10 @@ jobs:
       DATABASE_URL: postgresql://redmatrix:redmatrix@localhost:5432/redmatrix?schema=public
       REDIS_URL: redis://localhost:6379
       JWT_SECRET: ci-secret-do-not-use-in-prod
+      WEB_ORIGIN: '*'
+      # e2e.test.sh never hits /api/v1/ai/* or /imitate, so the stub key
+      # never reaches the wire. If you add AI assertions, mock the endpoint
+      # via msw or nock instead of issuing a real DeepSeek call.
       DEEPSEEK_API_KEY: sk-stub-for-ci
       DEEPSEEK_BASE_URL: https://api.deepseek.com/anthropic
       DEEPSEEK_MODEL: deepseek-v4-pro
@@ -85,6 +89,9 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Unit tests
+        run: pnpm test
 
       - name: Start server
         run: |

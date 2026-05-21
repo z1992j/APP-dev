@@ -1,6 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { PrismaModule } from './prisma.module';
+import { CommonModule } from './common/common.module';
+import { RedisModule } from './common/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { TeamsModule } from './teams/teams.module';
 import { AccountsModule } from './accounts/accounts.module';
@@ -19,6 +21,8 @@ import { AutomationModule } from './automation/automation.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
+    RedisModule,
+    CommonModule,
     AuthModule,
     TeamsModule,
     AccountsModule,

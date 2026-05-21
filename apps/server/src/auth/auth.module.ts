@@ -10,10 +10,21 @@ import { JwtGuard } from '../common/guards/jwt.guard';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (cfg: ConfigService) => ({
-        secret: cfg.get<string>('JWT_SECRET') ?? 'dev-secret',
-        signOptions: { expiresIn: cfg.get<string>('JWT_EXPIRES_IN') ?? '7d' },
-      }),
+      useFactory: (cfg: ConfigService) => {
+        const secret = cfg.get<string>('JWT_SECRET');
+        const isProd = cfg.get<string>('NODE_ENV') === 'production';
+        if (!secret) {
+          if (isProd) {
+            throw new Error('JWT_SECRET must be set in production');
+          }
+          // Dev convenience only: never let this leak to prod.
+          console.warn('[auth] JWT_SECRET not set, using dev fallback');
+        }
+        return {
+          secret: secret ?? 'dev-secret-do-not-use-in-prod',
+          signOptions: { expiresIn: cfg.get<string>('JWT_EXPIRES_IN') ?? '7d' },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

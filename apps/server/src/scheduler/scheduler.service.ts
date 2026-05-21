@@ -29,23 +29,26 @@ export class SchedulerService {
       this.log.log(
         `Reminder: draft ${d.id} "${d.title ?? ''}" for account ${d.account?.nickname ?? '?'} (author ${d.author?.id})`,
       );
-      // Production: dispatch wx.subscribeMessage.send via consumed subscribe_token.
-      // For now we just write an audit entry; the mini-program will detect status.
-      await this.prisma.auditLog.create({
-        data: {
-          teamId: d.teamId,
-          actorId: d.authorId,
-          action: 'draft.due',
-          targetType: 'draft',
-          targetId: d.id,
-          meta: { scheduleAt: d.scheduleAt },
-        },
-      });
-      // Move to 'due' to avoid re-firing while user hasn't acted.
-      await this.prisma.draft.update({
-        where: { id: d.id },
-        data: { status: 'due' },
-      });
+      // TODO(prod): dispatch wx.subscribeMessage.send via consumed
+      // subscribe_token. For now: write audit + flip status to 'due' so the
+      // web UI can show a "ready to publish" chip.
+      // The status->due flip + audit are atomic to avoid re-firing.
+      await this.prisma.$transaction([
+        this.prisma.auditLog.create({
+          data: {
+            teamId: d.teamId,
+            actorId: d.authorId,
+            action: 'draft.due',
+            targetType: 'draft',
+            targetId: d.id,
+            meta: { scheduleAt: d.scheduleAt },
+          },
+        }),
+        this.prisma.draft.update({
+          where: { id: d.id },
+          data: { status: 'due' },
+        }),
+      ]);
     }
   }
 

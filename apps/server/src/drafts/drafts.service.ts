@@ -4,7 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.module';
+import { ErrCode } from '../common/errors';
+import { clampLimit } from '../common/pagination';
 
 const ALLOWED_HOSTS = ['xiaohongshu.com', 'xhslink.com', 'www.xiaohongshu.com'];
 
@@ -14,8 +17,9 @@ export class DraftsService {
 
   async list(
     teamId: bigint,
-    opts: { status?: string; accountId?: string; cursor?: string },
+    opts: { status?: string; accountId?: string; cursor?: string; limit?: number },
   ) {
+    const take = clampLimit(opts.limit, 20);
     const items = await this.prisma.draft.findMany({
       where: {
         teamId,
@@ -24,10 +28,10 @@ export class DraftsService {
         ...(opts.cursor ? { id: { lt: BigInt(opts.cursor) } } : {}),
       },
       orderBy: { id: 'desc' },
-      take: 20,
+      take,
       include: { account: { select: { id: true, nickname: true } } },
     });
-    const nextCursor = items.length === 20 ? items[items.length - 1].id.toString() : null;
+    const nextCursor = items.length === take ? items[items.length - 1].id.toString() : null;
     return { items, nextCursor };
   }
 
@@ -70,11 +74,31 @@ export class DraftsService {
     });
   }
 
-  async update(teamId: bigint, id: bigint, data: Record<string, unknown>) {
+  async update(
+    teamId: bigint,
+    id: bigint,
+    data: {
+      accountId?: string | null;
+      kind?: 'image' | 'video';
+      title?: string;
+      body?: string;
+      media?: unknown[];
+      hashtags?: string[];
+    },
+  ) {
     await this.get(teamId, id);
-    const patch: Record<string, unknown> = { ...data };
+    // Whitelist: never let callers patch teamId / status / publishedAt /
+    // publishedUrl / aiMeta — those have dedicated lifecycle methods.
+    const patch: Prisma.DraftUpdateInput = {};
+    if (data.kind !== undefined) patch.kind = data.kind;
+    if (data.title !== undefined) patch.title = data.title;
+    if (data.body !== undefined) patch.body = data.body;
+    if (data.media !== undefined) patch.media = data.media as Prisma.InputJsonValue;
+    if (data.hashtags !== undefined) patch.hashtags = data.hashtags;
     if (data.accountId !== undefined) {
-      patch.accountId = data.accountId ? BigInt(String(data.accountId)) : null;
+      patch.account = data.accountId
+        ? { connect: { id: BigInt(String(data.accountId)) } }
+        : { disconnect: true };
     }
     return this.prisma.draft.update({ where: { id }, data: patch });
   }
@@ -82,7 +106,7 @@ export class DraftsService {
   async schedule(teamId: bigint, id: bigint, scheduleAt: Date) {
     const d = await this.get(teamId, id);
     if (scheduleAt.getTime() <= Date.now()) {
-      throw new BadRequestException({ code: 40001, message: '排期时间必须在未来' });
+      throw new BadRequestException({ code: ErrCode.BAD_INPUT, message: '排期时间必须在未来' });
     }
     return this.prisma.draft.update({
       where: { id: d.id },
@@ -112,7 +136,7 @@ export class DraftsService {
     const u = safeParseUrl(url);
     if (!u || !ALLOWED_HOSTS.includes(u.hostname)) {
       throw new BadRequestException({
-        code: 40001,
+        code: ErrCode.INVALID_LINK,
         message: '链接必须是小红书域名（xiaohongshu.com / xhslink.com）',
       });
     }
@@ -130,7 +154,7 @@ export class DraftsService {
     const d = await this.get(teamId, id);
     if (!['draft', 'rejected'].includes(d.status)) {
       throw new BadRequestException({
-        code: 40001,
+        code: ErrCode.BAD_INPUT,
         message: '当前状态不能提交评审',
       });
     }
@@ -157,7 +181,7 @@ export class DraftsService {
     dto: { decision: string; comment?: string },
   ) {
     if (!REVIEWER_ROLES.has(role)) {
-      throw new ForbiddenException({ code: 40301, message: '当前角色无评审权限' });
+      throw new ForbiddenException({ code: ErrCode.NO_REVIEW_PERMISSION, message: '当前角色无评审权限' });
     }
     const d = await this.get(teamId, id);
     const review = await this.prisma.draftReview.create({

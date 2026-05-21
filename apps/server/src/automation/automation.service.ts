@@ -9,6 +9,7 @@ import {
 import { PrismaService } from '../prisma.module';
 import { WorkerPool } from './worker-pool';
 import { XhsMcpClient } from './xhs-mcp-client';
+import { ErrCode } from '../common/errors';
 import axios from 'axios';
 
 export interface PublishResult {
@@ -29,7 +30,7 @@ export class AutomationService {
   async ensureWorker(teamId: bigint, accountId: bigint) {
     if (!(await this.pool.available())) {
       throw new InternalServerErrorException({
-        code: 50301,
+        code: ErrCode.DOCKER_UNAVAILABLE,
         message: 'Docker 不可用，自动化能力暂未就绪',
       });
     }
@@ -158,34 +159,44 @@ export class AutomationService {
 
   /** Publish a draft via the worker. Images are downloaded into the assets volume first. */
   async publishDraft(teamId: bigint, draftId: bigint, userId: bigint): Promise<PublishResult> {
-    const draft = await this.prisma.draft.findUnique({ where: { id: draftId } });
-    if (!draft || draft.teamId !== teamId) throw new NotFoundException('draft not found');
-    if (!draft.accountId) throw new BadRequestException({ code: 40001, message: '草稿未绑定账号' });
+    // Multi-tenant guard: findFirst with teamId scope so a forged draftId
+    // from another team can never reach the publish path.
+    const draft = await this.prisma.draft.findFirst({
+      where: { id: draftId, teamId },
+    });
+    if (!draft) throw new NotFoundException('draft not found');
+    if (!draft.accountId) throw new BadRequestException({ code: ErrCode.BAD_INPUT, message: '草稿未绑定账号' });
     await this.assertQuota(draft.accountId);
 
     const handle = await this.ensureWorker(teamId, draft.accountId);
     const client = new XhsMcpClient(handle.baseUrl);
     const login = await client.loginStatus();
     if (!login.is_logged_in) {
-      throw new BadRequestException({ code: 40002, message: '账号尚未登录，请先绑定扫码' });
+      throw new BadRequestException({ code: ErrCode.INVALID_LINK, message: '账号尚未登录，请先绑定扫码' });
     }
 
     const media = (draft.media as Array<{ url: string }>) ?? [];
-    if (media.length === 0) throw new BadRequestException({ code: 40001, message: '草稿无图片' });
+    if (media.length === 0) throw new BadRequestException({ code: ErrCode.BAD_INPUT, message: '草稿无图片' });
 
-    const localPaths: string[] = [];
-    for (let i = 0; i < media.length; i++) {
-      const url = media[i].url;
-      const buf = await downloadImage(url);
-      const name = `${draftId.toString()}-${i}.jpg`;
-      // Phase 2.1 requires tar-stream — for now the user must manually pre-stage files,
-      // OR we shell out to `docker cp` (handled by the deploy script side).
-      // Skeleton: this code path will throw via copyAssetsIn() until tar-stream lands.
-      localPaths.push(`/app/assets/${name}`);
-      await this.pool.copyAssetsIn(draft.accountId, [{ name, data: buf }]).catch((e) => {
-        throw new InternalServerErrorException({ code: 50001, message: `图片下载/分发失败：${(e as Error).message}` });
+    // Download all images first, then stream a single tar archive into the
+    // worker container in one shot. Avoids N round-trips through dockerode.
+    const downloads = await Promise.all(
+      media.map((m, i) =>
+        downloadImage(m.url).then((data) => ({
+          name: `${draftId.toString()}-${i}.jpg`,
+          data,
+        })),
+      ),
+    );
+    const localPaths = await this.pool
+      .copyAssetsIn(draft.accountId, downloads)
+      .catch((e: unknown) => {
+        const msg = e instanceof Error ? e.message : String(e);
+        throw new InternalServerErrorException({
+          code: ErrCode.IMAGE_DISPATCH_FAILED,
+          message: `图片下载/分发失败：${msg}`,
+        });
       });
-    }
 
     const result = await client.publish({
       title: draft.title ?? '',
@@ -194,24 +205,30 @@ export class AutomationService {
       tags: draft.hashtags,
     });
 
-    await this.prisma.draft.update({
-      where: { id: draft.id },
-      data: { status: 'published', publishedAt: new Date(), publishedUrl: result?.post_id ?? null },
-    });
-    await this.prisma.xhsSession.update({
-      where: { accountId: draft.accountId },
-      data: { lastUsedAt: new Date() },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        teamId,
-        actorId: userId,
-        action: 'automation.publish',
-        targetType: 'draft',
-        targetId: draft.id,
-        meta: { accountId: draft.accountId.toString(), result },
-      },
-    });
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.draft.update({
+        where: { id: draft.id },
+        data: { status: 'published', publishedAt: now, publishedUrl: result?.post_id ?? null },
+      }),
+      this.prisma.xhsSession.update({
+        where: { accountId: draft.accountId },
+        data: { lastUsedAt: now },
+      }),
+      this.prisma.publishLog.create({
+        data: { accountId: draft.accountId, draftId: draft.id, publishedAt: now },
+      }),
+      this.prisma.auditLog.create({
+        data: {
+          teamId,
+          actorId: userId,
+          action: 'automation.publish',
+          targetType: 'draft',
+          targetId: draft.id,
+          meta: { accountId: draft.accountId.toString(), result },
+        },
+      }),
+    ]);
     return { status: result?.status ?? 'ok', noteUrl: result?.post_id };
   }
 
@@ -232,8 +249,10 @@ export class AutomationService {
   }
 
   private async assertOwn(teamId: bigint, accountId: bigint) {
-    const a = await this.prisma.xhsAccount.findUnique({ where: { id: accountId } });
-    if (!a || a.teamId !== teamId) throw new ForbiddenException('account not in team');
+    const a = await this.prisma.xhsAccount.findFirst({
+      where: { id: accountId, teamId },
+    });
+    if (!a) throw new ForbiddenException({ code: ErrCode.ACCOUNT_NOT_IN_TEAM, message: 'account not in team' });
   }
 
   private async assertQuota(accountId: bigint) {
@@ -241,16 +260,14 @@ export class AutomationService {
     const quota = (session?.dailyQuota as Record<string, number>) ?? { posts: 3 };
     const since = new Date();
     since.setHours(0, 0, 0, 0);
-    const count = await this.prisma.auditLog.count({
-      where: {
-        action: 'automation.publish',
-        createdAt: { gte: since },
-        meta: { path: ['accountId'], equals: accountId.toString() },
-      },
+    // Indexed query on publish_log (accountId, publishedAt DESC) — fast even
+    // when the audit_log grows huge.
+    const count = await this.prisma.publishLog.count({
+      where: { accountId, publishedAt: { gte: since } },
     });
     if (count >= (quota.posts ?? 3)) {
       throw new ForbiddenException({
-        code: 40901,
+        code: ErrCode.QUOTA_EXCEEDED,
         message: `今日已达发帖上限 (${quota.posts})，明日再试或在账号设置调整配额`,
       });
     }

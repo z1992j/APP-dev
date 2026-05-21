@@ -1,6 +1,7 @@
-import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { Inject, Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma.module';
 import { Trie, TrieMatch } from './trie';
+import { LINT_EXTENSION, LintExtension } from './lint-extension';
 
 interface Violation {
   text: string;
@@ -9,7 +10,7 @@ interface Violation {
   level: 'red' | 'yellow' | 'info';
   category: string;
   suggestion?: string;
-  source: 'L1' | 'L1-regex';
+  source: 'L1' | 'L1-regex' | 'L2' | 'L3';
 }
 
 @Injectable()
@@ -20,12 +21,21 @@ export class LintService implements OnModuleInit {
   private currentVersion = 0;
   private lastReload = 0;
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Inject(LINT_EXTENSION) private readonly ext: LintExtension,
+  ) {}
 
   async onModuleInit() {
     await this.reload();
-    // poll for updates every 5 minutes
-    setInterval(() => this.reload().catch(() => undefined), 5 * 60 * 1000);
+    // poll for updates every 5 minutes; log failures so silent drift is visible
+    setInterval(
+      () =>
+        this.reload().catch((e: unknown) =>
+          this.log.warn(`lint reload failed: ${e instanceof Error ? e.message : String(e)}`),
+        ),
+      5 * 60 * 1000,
+    );
   }
 
   async reload() {
@@ -87,7 +97,28 @@ export class LintService implements OnModuleInit {
         });
       }
     }
-    // L2 (msgSecCheck) and L3 (LLM) are wired in production; stubbed in dev.
+    // L2: WeChat msgSecCheck — synchronous, blocks the response.
+    // Dev binding is NoopLintExtension; prod overrides via LINT_EXTENSION provider.
+    try {
+      const l2 = await this.ext.checkSensitive(target);
+      for (const v of l2) {
+        violations.push({
+          text: v.text,
+          start: 0,
+          end: 0,
+          level: v.level,
+          category: v.category,
+          suggestion: v.suggestion,
+          source: 'L2',
+        });
+      }
+    } catch (e: unknown) {
+      this.log.warn(`L2 check failed (non-fatal): ${e instanceof Error ? e.message : String(e)}`);
+    }
+    // L3: LLM check fires-and-forgets; results show on next /lint call.
+    // We don't await it here so the editor stays snappy.
+    void this.ext.checkContextual(text, title).catch(() => undefined);
+
     const hasRed = violations.some((v) => v.level === 'red');
     return {
       passed: !hasRed,

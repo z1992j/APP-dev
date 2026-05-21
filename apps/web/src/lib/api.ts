@@ -1,5 +1,8 @@
-// Thin REST client. Token stored in localStorage for MVP; production should
-// switch to httpOnly cookie + CSRF.
+// Thin REST client.
+// TODO(H4): Token currently stored in localStorage, which is XSS-stealable.
+// Migrate to httpOnly Secure SameSite=Lax cookie + CSRF double-submit token
+// before production launch. This is its own PR because it touches both
+// the NestJS auth flow and Codespaces' dynamic preview-URL origins.
 
 const STORAGE_KEY = 'redmatrix:auth';
 

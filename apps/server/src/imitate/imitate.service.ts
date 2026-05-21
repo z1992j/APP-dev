@@ -5,6 +5,10 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma.module';
 import { fetchReferenceNote, RefNoteParsed } from './xhs-fetcher';
 import { verticalKnowledge, personaBlock } from '../ai/prompts';
+import { ErrCode } from '../common/errors';
+import { pickUsage } from '../common/llm-usage';
+import { safeParseJsonObject } from '../common/json';
+import { AiUsageRecorder } from '../common/ai-usage.recorder';
 
 // Locked imitation prompt — uses the user's exact wording.
 const IMITATE_INSTRUCTION = `帮我参考这条小红书，文案文字稍作修改表达一致意思，
@@ -25,6 +29,7 @@ export class ImitateService {
   constructor(
     private readonly cfg: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly usage: AiUsageRecorder,
   ) {
     this.anthropic = new Anthropic({
       apiKey: cfg.get<string>('DEEPSEEK_API_KEY') ?? '',
@@ -49,7 +54,7 @@ export class ImitateService {
           : undefined,
       };
     } catch (e) {
-      throw new BadRequestException({ code: 40001, message: (e as Error).message });
+      throw new BadRequestException({ code: ErrCode.BAD_INPUT, message: (e as Error).message });
     }
   }
 
@@ -63,13 +68,13 @@ export class ImitateService {
     const account = await this.prisma.xhsAccount.findFirst({
       where: { id: input.accountId, teamId: input.teamId },
     });
-    if (!account) throw new ForbiddenException({ code: 40301, message: '账号档案不属于当前团队' });
+    if (!account) throw new ForbiddenException({ code: ErrCode.ACCOUNT_NOT_IN_TEAM, message: '账号档案不属于当前团队' });
 
     const parsed = await this.cacheGetOrFetch(input.url);
     yield { type: 'parsed', ref: { title: parsed.title, body: parsed.body, images: parsed.images.slice(0, 9), author: parsed.author } };
 
     if (!parsed.body && !parsed.title) {
-      throw new BadRequestException({ code: 40001, message: '参考帖无法解析正文（可能是私密或视频笔记）' });
+      throw new BadRequestException({ code: ErrCode.REF_UNAVAILABLE, message: '参考帖无法解析正文（可能是私密或视频笔记）' });
     }
 
     const system = [
@@ -91,9 +96,7 @@ export class ImitateService {
     ].filter(Boolean).join('\n');
 
     let buf = '';
-    let inputTokens = 0;
-    let cachedTokens = 0;
-    let outputTokens = 0;
+    let stats = { input: 0, cached: 0, output: 0 };
     try {
       const stream = this.anthropic.messages.stream({
         model: this.model,
@@ -109,15 +112,19 @@ export class ImitateService {
         }
       }
       const finalMsg = await stream.finalMessage();
-      const usage = finalMsg.usage as unknown as Record<string, number> | undefined;
-      inputTokens = usage?.input_tokens ?? 0;
-      cachedTokens = usage?.cache_read_input_tokens ?? 0;
-      outputTokens = usage?.output_tokens ?? 0;
+      stats = pickUsage(finalMsg.usage);
     } finally {
-      await this.recordUsage(input.teamId, input.userId, inputTokens, cachedTokens, outputTokens);
+      await this.usage.record({
+        teamId: input.teamId,
+        userId: input.userId,
+        kind: 'imitate',
+        provider: 'deepseek',
+        model: this.model,
+        stats,
+      });
     }
 
-    const result = safeParseJson<{ title: string; body: string; hashtags: string[] }>(buf);
+    const result = safeParseJsonObject<{ title: string; body: string; hashtags: string[] }>(buf);
     if (!result) {
       yield { type: 'error', message: 'AI 输出 JSON 解析失败' };
       return;
@@ -141,7 +148,13 @@ export class ImitateService {
         hashtags: result.hashtags ?? [],
         media: media as object,
         status: 'draft',
-        aiMeta: { source: 'imitate', refUrl: parsed.url, inputTokens, cachedTokens, outputTokens },
+        aiMeta: {
+          source: 'imitate',
+          refUrl: parsed.url,
+          inputTokens: stats.input,
+          cachedTokens: stats.cached,
+          outputTokens: stats.output,
+        },
       },
     });
 
@@ -183,31 +196,6 @@ export class ImitateService {
     return fresh;
   }
 
-  private async recordUsage(teamId: bigint, userId: bigint, i: number, c: number, o: number) {
-    const inP = Number(this.cfg.get('DEEPSEEK_PRICE_INPUT_PER_M') ?? 0.27);
-    const cacheP = Number(this.cfg.get('DEEPSEEK_PRICE_CACHE_PER_M') ?? 0.07);
-    const outP = Number(this.cfg.get('DEEPSEEK_PRICE_OUTPUT_PER_M') ?? 1.1);
-    const costUsd = ((i - c) * inP + c * cacheP + o * outP) / 1_000_000;
-    await this.prisma.aiUsage.create({
-      data: {
-        teamId,
-        userId,
-        kind: 'imitate',
-        provider: 'deepseek',
-        model: this.model,
-        promptTokens: i,
-        cachedTokens: c,
-        outputTokens: o,
-        costCents: Math.round(costUsd * 100),
-      },
-    });
-  }
 }
 
-function safeParseJson<T>(s: string): T | null {
-  const a = s.indexOf('{');
-  const b = s.lastIndexOf('}');
-  if (a === -1 || b === -1) return null;
-  try { return JSON.parse(s.slice(a, b + 1)) as T; } catch { return null; }
-}
 function sha1(s: string): string { return createHash('sha1').update(s).digest('hex'); }

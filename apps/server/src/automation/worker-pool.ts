@@ -66,8 +66,8 @@ export class WorkerPool {
       if (!portBinding) return null;
       const port = Number(portBinding);
       return { containerId: info.Id, port, baseUrl: `http://${this.host}:${port}` };
-    } catch (e: any) {
-      if (e.statusCode === 404) return null;
+    } catch (e: unknown) {
+      if (isDockerNotFound(e)) return null;
       throw e;
     }
   }
@@ -80,8 +80,10 @@ export class WorkerPool {
     for (const v of [this.cookiesVolume(spec.accountId), this.assetsVolume(spec.accountId)]) {
       try {
         await this.docker.createVolume({ Name: v });
-      } catch (e: any) {
-        if (e.statusCode !== 409) this.log.warn(`volume ${v} create: ${e.message}`);
+      } catch (e: unknown) {
+        if (!isDockerConflict(e)) {
+          this.log.warn(`volume ${v} create: ${errMsg(e)}`);
+        }
       }
     }
 
@@ -123,28 +125,31 @@ export class WorkerPool {
     const name = this.containerName(accountId);
     try {
       const c = this.docker.getContainer(name);
-      await c.stop({ t: 5 }).catch(() => undefined);
-      await c.remove({ force: true }).catch(() => undefined);
+      await c.stop({ t: 5 }).catch((e: unknown) => this.log.warn(`stop(${accountId}): ${errMsg(e)}`));
+      await c.remove({ force: true }).catch((e: unknown) => this.log.warn(`remove(${accountId}): ${errMsg(e)}`));
       this.log.log(`worker stopped: account=${accountId}`);
-    } catch (e: any) {
-      if (e.statusCode !== 404) throw e;
+    } catch (e: unknown) {
+      if (!isDockerNotFound(e)) throw e;
     }
   }
 
-  async copyAssetsIn(accountId: bigint, files: Array<{ name: string; data: Buffer }>): Promise<string[]> {
-    // Streams files into the assets volume via a helper alpine container.
-    // Returns paths inside the worker container.
+  async copyAssetsIn(
+    accountId: bigint,
+    files: Array<{ name: string; data: Buffer }>,
+  ): Promise<string[]> {
+    // Stream files directly into the running worker container's /app/assets
+    // dir via docker putArchive. Worker mounts the same assets volume, so
+    // the files persist across restarts. This replaces the previous alpine
+    // helper-container path which never actually worked (the helper exited
+    // before putArchive could complete).
+    const name = this.containerName(accountId);
+    const container = this.docker.getContainer(name);
+    const info = await container.inspect().catch(() => null);
+    if (!info || !info.State.Running) {
+      throw new Error(`worker container for account=${accountId} not running`);
+    }
     const tarStream = await tarFromFiles(files);
-    const helper = await this.docker.createContainer({
-      Image: 'alpine:3.19',
-      Cmd: ['/bin/true'],
-      HostConfig: {
-        Binds: [`${this.assetsVolume(accountId)}:/dest`],
-        AutoRemove: true,
-      },
-    });
-    await helper.start().catch(() => undefined);
-    await helper.putArchive(tarStream, { path: '/dest' });
+    await container.putArchive(tarStream, { path: '/app/assets' });
     return files.map((f) => `/app/assets/${f.name}`);
   }
 
@@ -172,4 +177,14 @@ async function tarFromFiles(files: Array<{ name: string; data: Buffer }>): Promi
   }
   pack.finalize();
   return pack;
+}
+
+// Dockerode throws shaped objects (not Error instances). Narrow without casting.
+function isDockerErr(e: unknown, status: number): boolean {
+  return typeof e === 'object' && e !== null && (e as { statusCode?: number }).statusCode === status;
+}
+const isDockerNotFound = (e: unknown) => isDockerErr(e, 404);
+const isDockerConflict = (e: unknown) => isDockerErr(e, 409);
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
 }

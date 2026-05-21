@@ -90,6 +90,11 @@ model Draft {
   body          String?
   media         Json      @default("[]")
   hashtags      String[]  @default([])
+  // Status machine:
+  //   draft → in_review → approved | rejected
+  //   approved → scheduled → due → handed_off → published
+  //   any → archived
+  // `due` means scheduler hit the scheduleAt but no push/handoff yet.
   status        String    @default("draft")
   scheduleAt    DateTime? @map("schedule_at")
   handedOffAt   DateTime? @map("handed_off_at")
@@ -295,6 +300,9 @@ model Proxy {
   @@map("proxy")
 }
 
+// Reserved for Phase 3 BullMQ-backed job queue. No producer / consumer yet —
+// schema kept so the migration order is stable when the workers land.
+// Do NOT remove columns; the Phase 3 worker code already targets this shape.
 model Job {
   id          BigInt    @id @default(autoincrement())
   teamId      BigInt    @map("team_id")
@@ -312,4 +320,17 @@ model Job {
 
   @@index([teamId, status, scheduledAt])
   @@map("job")
+}
+
+// Append-only log of successful automation.publish actions. Used by
+// AutomationService.assertQuota to count daily posts per account without
+// scanning audit_log (which had no covering index).
+model PublishLog {
+  id          BigInt   @id @default(autoincrement())
+  accountId   BigInt   @map("account_id")
+  draftId     BigInt?  @map("draft_id")
+  publishedAt DateTime @default(now()) @map("published_at")
+
+  @@index([accountId, publishedAt(sort: Desc)])
+  @@map("publish_log")
 }
