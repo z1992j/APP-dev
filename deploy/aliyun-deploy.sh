@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # RedMatrix 一键部署到阿里云 ECS 轻量服务器（或任何 Linux）
 # 用法：
-#   curl -sSL https://raw.githubusercontent.com/z1992j/APP-dev/main/deploy/aliyun-deploy.sh \
+#   curl -sSL https://raw.githubusercontent.com/z1992j/RedMatrix/main/deploy/aliyun-deploy.sh \
 #     | bash -s -- --deepseek-key sk-xxx [--ip 公网IP] [--mode build|ghcr]
 #
 # 或先克隆再跑：
-#   git clone https://github.com/z1992j/APP-dev.git && cd APP-dev
+#   git clone https://github.com/z1992j/RedMatrix.git && cd RedMatrix
 #   bash deploy/aliyun-deploy.sh --deepseek-key sk-xxx
 #
 # 默认走 build 模式（在 ECS 本地 docker build），避免 GHCR PAT 配置。
@@ -19,7 +19,7 @@ DEEPSEEK_MODEL="deepseek-v4-pro"
 PUBLIC_IP=""
 GH_TOKEN=""
 GH_OWNER="z1992j"
-REPO_URL="https://github.com/z1992j/APP-dev.git"
+REPO_URL="https://github.com/z1992j/RedMatrix.git"
 WORK_DIR="${WORK_DIR:-$HOME/redmatrix}"
 SKIP_DEPS="false"
 
