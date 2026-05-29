@@ -1,0 +1,10 @@
+ignoredBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - bcrypt
+  - cpu-features
+  - msgpackr-extract
+  - prisma
+  - protobufjs
+  - ssh2
