@@ -50,6 +50,7 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY}
       DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com/anthropic}
       DEEPSEEK_MODEL: ${DEEPSEEK_MODEL:-deepseek-v4-pro}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
       WORKER_HOST: ${WORKER_HOST:-127.0.0.1}
       XHS_MCP_IMAGE: ${XHS_MCP_IMAGE:-xpzouying/xiaohongshu-mcp:latest}
     ports:

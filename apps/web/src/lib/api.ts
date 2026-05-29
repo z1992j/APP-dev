@@ -38,11 +38,13 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const auth = loadAuth();
   const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method,
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
+      ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -60,12 +62,14 @@ export async function streamSSE(
   body: unknown,
   onEvent: (evt: any) => void,
 ): Promise<void> {
+  const auth = loadAuth();
   const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
+      ...(auth?.token ? { Authorization: `Bearer ${auth.token}` } : {}),
     },
     body: JSON.stringify(body),
   });
