@@ -64,6 +64,7 @@ services:
     depends_on: [server]
     environment:
       NEXT_PUBLIC_API_BASE: ${PUBLIC_API_BASE:-http://localhost:3000}
+      INTERNAL_API_BASE: http://server:3000
     ports:
       - '3001:3001'
 

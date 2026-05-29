@@ -10,6 +10,9 @@ RUN npm install -g pnpm@10
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
+# Rewrite destination baked at build time (Docker service name)
+ARG INTERNAL_API_BASE=http://server:3000
+ENV INTERNAL_API_BASE=$INTERNAL_API_BASE
 RUN pnpm run build
 
 FROM node:20-alpine
