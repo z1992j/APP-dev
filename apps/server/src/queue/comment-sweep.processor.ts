@@ -71,6 +71,7 @@ export class CommentSweepProcessor extends WorkerHost {
                 likedCount: c.likedCount ?? 0,
                 publishedAt: c.publishedAt ?? new Date(),
                 status: 'new',
+                sentiment: classifySentiment(c.content),
               },
             });
             totalNew += 1;
@@ -137,4 +138,18 @@ function extractComments(detail: any): Comment[] {
     }
   }
   return out;
+}
+
+const POS_WORDS = ['好', '棒', '赞', '喜欢', '爱', '太好了', '推荐', '种草', '绝了', '宝藏', '感谢', '谢谢', '太棒', '优秀', '满意', '值得', '必买', '回购', '心动', '入手'];
+const NEG_WORDS = ['差', '难吃', '坑', '骗', '假', '垃圾', '差评', '退款', '投诉', '失望', '恶心', '难看', '不好', '烂', '吐槽', '后悔', '踩雷', '翻车', '智商税', '割韭菜'];
+
+function classifySentiment(text: string): string {
+  const lower = text.toLowerCase();
+  let posScore = 0;
+  let negScore = 0;
+  for (const w of POS_WORDS) { if (lower.includes(w)) posScore++; }
+  for (const w of NEG_WORDS) { if (lower.includes(w)) negScore++; }
+  if (posScore > negScore) return 'positive';
+  if (negScore > posScore) return 'negative';
+  return 'neutral';
 }

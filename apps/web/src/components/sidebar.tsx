@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { Api } from '@/lib/api';
 import { loadAuth, saveAuth, clearAuth } from '@/lib/api';
+import { useAccountStore } from '@/lib/account-store';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -13,8 +14,10 @@ const NAV = [
   { href: '/imitate', label: '一键仿写', icon: '🪄' },
   { href: '/drafts', label: '草稿', icon: '📝' },
   { href: '/comments', label: '评论', icon: '💬' },
+  { href: '/dm', label: '私信', icon: '✉️' },
   { href: '/data', label: '数据', icon: '📊' },
   { href: '/accounts', label: '账号档案', icon: '👥' },
+  { href: '/workers', label: 'Worker 监控', icon: '🖥️' },
   { href: '/team', label: '团队', icon: '🏢' },
 ];
 
@@ -28,6 +31,7 @@ export function Sidebar() {
   const router = useRouter();
   const [auth, setAuth] = useState(() => loadAuth());
   const [teams, setTeams] = useState<any[]>([]);
+  const { accounts, activeId, setAccounts, setActiveId } = useAccountStore();
 
   useEffect(() => {
     setAuth(loadAuth());
@@ -36,6 +40,7 @@ export function Sidebar() {
   useEffect(() => {
     if (!auth) return;
     Api.myTeams().then(setTeams).catch(() => undefined);
+    Api.listAccounts().then(setAccounts).catch(() => undefined);
   }, [auth?.team.id]);
 
   async function onSwitchTeam(teamId: string) {
@@ -77,6 +82,23 @@ export function Sidebar() {
             {teams.map((t) => (
               <option key={t.teamId} value={t.teamId}>
                 {t.name}（{t.role}）
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {auth && accounts.length > 0 && (
+        <div className="px-5 pt-3">
+          <div className="text-xs text-ink-500 mb-1">操作账号</div>
+          <select
+            className="w-full bg-ink-100/60 rounded-md px-2 py-1.5 text-sm focus:outline-none"
+            value={activeId ?? ''}
+            onChange={(e) => setActiveId(e.target.value || null)}
+          >
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.nickname}{a.vertical ? ` (${a.vertical})` : ''}
               </option>
             ))}
           </select>

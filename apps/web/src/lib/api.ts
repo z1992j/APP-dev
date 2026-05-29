@@ -1,10 +1,8 @@
-// Thin REST client. Token stored in localStorage for MVP; production should
-// switch to httpOnly cookie + CSRF.
+// REST client. Auth token sent as httpOnly cookie (set by server) + Bearer header fallback.
+// User profile (id/nickname/team) kept in localStorage for UI; token itself is NOT in localStorage.
 
 const STORAGE_KEY = 'redmatrix:auth';
 
-// 静态导出（GitHub Pages）下没有 Next rewrites，必须打绝对地址；
-// 本机开发 / Docker 内 SSR 模式下 NEXT_PUBLIC_API_BASE 为空，走 /api 由 rewrites 接管。
 const API_ORIGIN = (process.env.NEXT_PUBLIC_API_BASE ?? '').replace(/\/+$/, '');
 
 export interface AuthState {
@@ -40,12 +38,11 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
-  const token = loadAuth()?.token;
   const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method,
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -58,19 +55,17 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   return res.json() as Promise<T>;
 }
 
-// Server-sent events for streaming AI write.
 export async function streamSSE(
   path: string,
   body: unknown,
   onEvent: (evt: any) => void,
 ): Promise<void> {
-  const token = loadAuth()?.token;
   const res = await fetch(`${API_ORIGIN}/api/v1${path}`, {
     method: 'POST',
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify(body),
   });
@@ -210,6 +205,12 @@ export const Api = {
     request<any>('DELETE', `/comment-rules/${id}`),
 
   // automation (Phase 2)
+  autoBatchStatus: () =>
+    request<Record<string, { status: string; workerHealth: string; lastUsedAt: string | null }>>(
+      'GET', '/automation/sessions/batch-status',
+    ),
+  autoWorkerHealth: () =>
+    request<{ dockerAvailable: boolean; workers: any[] }>('GET', '/automation/workers/health'),
   autoStatus: (accountId: string) =>
     request<{
       status: string;
@@ -240,6 +241,35 @@ export const Api = {
   // data
   reportData: (data: { accountId: string; bucketDate: string; metrics: Record<string, number> }) =>
     request<any>('POST', '/data/report', data),
+  accountData: (accountId: string, from?: string, to?: string) => {
+    const q = new URLSearchParams();
+    if (from) q.set('from', from);
+    if (to) q.set('to', to);
+    const qs = q.toString();
+    return request<{ series: any[] }>('GET', `/data/account/${accountId}${qs ? `?${qs}` : ''}`);
+  },
   teamData: () =>
     request<{ totals: Record<string, number>; accounts: any[] }>('GET', '/data/team'),
+
+  // dm (Phase 5)
+  dmConversations: (params: { accountId?: string; status?: string; cursor?: string } = {}) => {
+    const q = new URLSearchParams();
+    if (params.accountId) q.set('accountId', params.accountId);
+    if (params.status) q.set('status', params.status);
+    if (params.cursor) q.set('cursor', params.cursor);
+    const qs = q.toString();
+    return request<{ items: any[]; nextCursor: string | null }>('GET', `/dm/conversations${qs ? `?${qs}` : ''}`);
+  },
+  dmMessages: (convId: string, cursor?: string) => {
+    const q = cursor ? `?cursor=${cursor}` : '';
+    return request<{ items: any[]; nextCursor: string | null }>('GET', `/dm/conversations/${convId}/messages${q}`);
+  },
+  dmSend: (convId: string, content: string) =>
+    request<any>('POST', `/dm/conversations/${convId}/send`, { content }),
+  dmAiSuggest: (convId: string) =>
+    request<{ suggestion: string }>('POST', `/dm/conversations/${convId}/ai-suggest`),
+  dmArchive: (convId: string) =>
+    request<{ ok: boolean }>('POST', `/dm/conversations/${convId}/archive`),
+  dmStats: () =>
+    request<{ totalUnread: number; unreadConversations: number }>('GET', '/dm/stats'),
 };

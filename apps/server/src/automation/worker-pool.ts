@@ -30,7 +30,13 @@ export class WorkerPool {
   private readonly host: string;
 
   constructor(private readonly cfg: ConfigService) {
-    this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+    const dockerHost = cfg.get<string>('DOCKER_HOST');
+    if (dockerHost) {
+      const u = new URL(dockerHost);
+      this.docker = new Docker({ host: u.hostname, port: Number(u.port) || 2375 });
+    } else {
+      this.docker = new Docker({ socketPath: '/var/run/docker.sock' });
+    }
     this.image = cfg.get<string>('XHS_MCP_IMAGE') ?? IMAGE_DEFAULT;
     this.host = cfg.get<string>('WORKER_HOST') ?? '127.0.0.1';
   }

@@ -18,11 +18,21 @@ export class JwtGuard implements CanActivate {
 
   canActivate(ctx: ExecutionContext): boolean {
     const req = ctx.switchToHttp().getRequest();
+
+    let token: string | undefined;
+
     const auth: string | undefined = req.headers['authorization'];
-    if (!auth?.startsWith('Bearer ')) {
+    if (auth?.startsWith('Bearer ')) {
+      token = auth.slice(7);
+    }
+
+    if (!token && req.cookies?.['redmatrix_token']) {
+      token = req.cookies['redmatrix_token'];
+    }
+
+    if (!token) {
       throw new UnauthorizedException({ code: 40001, message: 'missing token' });
     }
-    const token = auth.slice(7);
     try {
       const payload = this.jwt.verify<JwtPayload>(token);
       req.user = payload;

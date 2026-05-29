@@ -24,6 +24,16 @@ class CommentDto {
 export class AutomationController {
   constructor(private readonly svc: AutomationService) {}
 
+  @Get('sessions/batch-status')
+  batchStatus(@CurrentUser() u: JwtPayload) {
+    return this.svc.batchStatus(BigInt(u.teamId));
+  }
+
+  @Get('workers/health')
+  workerHealth(@CurrentUser() u: JwtPayload) {
+    return this.svc.workerHealth(BigInt(u.teamId));
+  }
+
   @Get('sessions/:accountId/status')
   status(@CurrentUser() u: JwtPayload, @Param('accountId') id: string) {
     return this.svc.status(BigInt(u.teamId), BigInt(id));

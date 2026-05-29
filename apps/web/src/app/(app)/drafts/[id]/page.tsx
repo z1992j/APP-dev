@@ -204,6 +204,46 @@ export default function DraftEditPage({ params }: { params: Promise<{ id: string
         </div>
       </Card>
 
+      {/* Image management */}
+      {draft.media?.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <CardTitle>图片（{draft.media.length}张）</CardTitle>
+            <div className="text-xs text-ink-500">拖拽可排序，点击设封面（第一张为封面）</div>
+          </div>
+          <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+            {(draft.media as Array<{ url?: string; key?: string; src?: string }>).map((m, i) => {
+              const src = m.url || m.key || '';
+              return (
+                <div key={i} className={cn(
+                  'relative aspect-square rounded-lg overflow-hidden border-2 cursor-pointer transition-all',
+                  i === 0 ? 'border-brand-500' : 'border-ink-100 hover:border-brand-300',
+                )} onClick={() => {
+                  if (i === 0) return;
+                  const next = [...draft.media];
+                  const [moved] = next.splice(i, 1);
+                  next.unshift(moved);
+                  setDraft({ ...draft, media: next });
+                  Api.updateDraft(id, { ...draft, media: next }).catch(() => {});
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={src}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={(e) => { (e.target as HTMLImageElement).style.opacity = '0.3'; }}
+                  />
+                  {i === 0 && (
+                    <span className="absolute top-1 left-1 bg-brand-500 text-white text-xs px-1.5 py-0.5 rounded">封面</span>
+                  )}
+                  <span className="absolute bottom-1 right-1 bg-black/50 text-white text-xs px-1 rounded">{i + 1}</span>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Button variant="ghost" onClick={runLint}>
           🔎 检查违禁词

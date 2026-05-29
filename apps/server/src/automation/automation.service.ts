@@ -68,6 +68,59 @@ export class AutomationService {
     return handle;
   }
 
+  async workerHealth(teamId: bigint) {
+    const accounts = await this.prisma.xhsAccount.findMany({ where: { teamId } });
+    const sessions = await this.prisma.xhsSession.findMany({
+      where: { accountId: { in: accounts.map((a) => a.id) } },
+    });
+    const workers: Array<{
+      accountId: string;
+      nickname: string;
+      status: string;
+      workerHealth: string;
+      port: number | null;
+      containerId: string | null;
+      startedAt: Date | null;
+      lastUsedAt: Date | null;
+      dailyQuota: any;
+    }> = [];
+    const sessionMap = new Map(sessions.map((s) => [s.accountId.toString(), s]));
+    for (const a of accounts) {
+      const s = sessionMap.get(a.id.toString());
+      workers.push({
+        accountId: a.id.toString(),
+        nickname: a.nickname,
+        status: s?.status ?? 'needs_bind',
+        workerHealth: s?.workerHealth ?? 'none',
+        port: s?.workerPort ?? null,
+        containerId: s?.workerContainerId?.slice(0, 12) ?? null,
+        startedAt: s?.workerStartedAt ?? null,
+        lastUsedAt: s?.lastUsedAt ?? null,
+        dailyQuota: s?.dailyQuota ?? { posts: 3 },
+      });
+    }
+    const dockerAvailable = await this.pool.available();
+    return { dockerAvailable, workers };
+  }
+
+  async batchStatus(teamId: bigint) {
+    const accounts = await this.prisma.xhsAccount.findMany({ where: { teamId } });
+    const sessions = await this.prisma.xhsSession.findMany({
+      where: { accountId: { in: accounts.map((a) => a.id) } },
+    });
+    const sessionMap = new Map(sessions.map((s) => [s.accountId.toString(), s]));
+    const result: Record<string, { status: string; workerHealth: string; lastUsedAt: Date | null }> = {};
+    for (const a of accounts) {
+      const s = sessionMap.get(a.id.toString());
+      result[a.id.toString()] = {
+        status: s?.status ?? 'needs_bind',
+        workerHealth: s?.workerHealth ?? 'none',
+        lastUsedAt: s?.lastUsedAt ?? null,
+      };
+    }
+    return result;
+  }
+
   async status(teamId: bigint, accountId: bigint) {
     await this.assertOwn(teamId, accountId);
     const session = await this.prisma.xhsSession.findUnique({ where: { accountId } });

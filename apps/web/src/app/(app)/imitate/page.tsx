@@ -6,6 +6,7 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Api, streamSSE } from '@/lib/api';
+import { useAccountStore } from '@/lib/account-store';
 import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 
@@ -35,18 +36,18 @@ export default function ImitatePage() {
   const [url, setUrl] = useState('');
   const [parsed, setParsed] = useState<ParsedRef | null>(null);
   const [parsing, setParsing] = useState(false);
-  const [accounts, setAccounts] = useState<any[]>([]);
-  const [accountId, setAccountId] = useState('');
+  const { accounts, activeId: accountId, setActiveId: setAccountId, setAccounts } = useAccountStore();
   const [extra, setExtra] = useState(DEFAULT_EXTRA);
   const [generating, setGenerating] = useState(false);
   const [streamBuf, setStreamBuf] = useState('');
   const [result, setResult] = useState<Result | null>(null);
+  const [batchMode, setBatchMode] = useState(false);
+  const [batchUrls, setBatchUrls] = useState('');
+  const [batchResults, setBatchResults] = useState<Array<{ url: string; status: 'pending' | 'running' | 'done' | 'error'; draftId?: string; title?: string; error?: string }>>([]);
+  const [batchRunning, setBatchRunning] = useState(false);
 
   useEffect(() => {
-    Api.listAccounts().then((list) => {
-      setAccounts(list);
-      if (list.length > 0) setAccountId(list[0].id);
-    }).catch((e) => toast(e.message, 'error'));
+    Api.listAccounts().then(setAccounts).catch((e) => toast(e.message, 'error'));
   }, []);
 
   async function onParse() {
@@ -101,14 +102,117 @@ export default function ImitatePage() {
     }
   }
 
+  async function onBatchGenerate() {
+    const urls = batchUrls.split('\n').map((s) => s.trim()).filter(Boolean);
+    if (urls.length === 0) return toast('请输入至少一个链接', 'info');
+    if (!accountId) return toast('请先选择账号', 'info');
+    setBatchRunning(true);
+    setBatchResults(urls.map((u) => ({ url: u, status: 'pending' })));
+    for (let i = 0; i < urls.length; i++) {
+      setBatchResults((prev) => prev.map((r, j) => j === i ? { ...r, status: 'running' } : r));
+      try {
+        let draftId = '';
+        let title = '';
+        await streamSSE(
+          '/imitate/generate',
+          { url: urls[i], accountId, extraInstruction: extra },
+          (evt) => {
+            if (evt.type === 'done') {
+              draftId = evt.draftId ?? '';
+              title = evt.result?.title ?? '';
+            }
+          },
+        );
+        setBatchResults((prev) => prev.map((r, j) => j === i ? { ...r, status: 'done', draftId, title } : r));
+      } catch (e: any) {
+        setBatchResults((prev) => prev.map((r, j) => j === i ? { ...r, status: 'error', error: e?.message ?? '失败' } : r));
+      }
+    }
+    setBatchRunning(false);
+    toast(`批量仿写完成，共 ${urls.length} 条`, 'success');
+  }
+
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-semibold">一键仿写</h1>
-        <p className="text-sm text-ink-500 mt-1">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold">一键仿写</h1>
+          <p className="text-sm text-ink-500 mt-1">
           粘贴小红书参考帖链接 → AI 按你的提示词改写，城市/数字/运营商/套餐严格不动，图片沿用参考 → 一键存到草稿。
         </p>
       </div>
+        <Button variant="ghost" onClick={() => setBatchMode(!batchMode)}>
+          {batchMode ? '单条模式' : '批量模式'}
+        </Button>
+      </div>
+
+      {batchMode ? (
+        <>
+          <Card>
+            <CardTitle>批量仿写</CardTitle>
+            <div className="space-y-3">
+              <Field label="参考链接（每行一个）">
+                <Textarea
+                  value={batchUrls}
+                  onChange={(e) => setBatchUrls(e.target.value)}
+                  rows={6}
+                  placeholder={'https://www.xiaohongshu.com/explore/xxx\nhttps://www.xiaohongshu.com/explore/yyy\nhttps://www.xiaohongshu.com/explore/zzz'}
+                />
+              </Field>
+              <Field label="发到哪个账号">
+                <div className="flex flex-wrap gap-2">
+                  {accounts.map((a) => (
+                    <button
+                      key={a.id}
+                      onClick={() => setAccountId(a.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-sm border transition-colors',
+                        accountId === a.id
+                          ? 'bg-brand-500 text-white border-brand-500'
+                          : 'border-ink-100 text-ink-700 hover:border-brand-500',
+                      )}
+                    >
+                      {a.nickname}
+                    </button>
+                  ))}
+                </div>
+              </Field>
+              <Field label="提示词">
+                <Textarea value={extra} onChange={(e) => setExtra(e.target.value)} rows={3} />
+              </Field>
+              <Button onClick={onBatchGenerate} disabled={batchRunning} size="lg" className="w-full">
+                {batchRunning ? '批量生成中…' : '开始批量仿写'}
+              </Button>
+            </div>
+          </Card>
+          {batchResults.length > 0 && (
+            <Card>
+              <CardTitle>批量进度</CardTitle>
+              <div className="space-y-2">
+                {batchResults.map((r, i) => (
+                  <div key={i} className="flex items-center gap-3 text-sm py-2 border-b border-ink-100 last:border-0">
+                    <span className={cn(
+                      'w-2.5 h-2.5 rounded-full shrink-0',
+                      r.status === 'done' ? 'bg-emerald-500' :
+                      r.status === 'running' ? 'bg-amber-400 animate-pulse' :
+                      r.status === 'error' ? 'bg-red-500' : 'bg-ink-300'
+                    )} />
+                    <span className="truncate flex-1 text-ink-700">{r.url}</span>
+                    {r.status === 'done' && r.title && <span className="text-xs text-ink-500 truncate max-w-[200px]">{r.title}</span>}
+                    {r.status === 'done' && r.draftId && (
+                      <button onClick={() => router.push(`/drafts/${r.draftId}`)} className="text-xs text-brand-500 hover:underline shrink-0">查看草稿</button>
+                    )}
+                    {r.status === 'error' && <span className="text-xs text-red-500">{r.error}</span>}
+                    {r.status === 'pending' && <span className="text-xs text-ink-400">排队中</span>}
+                    {r.status === 'running' && <span className="text-xs text-amber-600">生成中…</span>}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
+        </>
+      ) : (
+      <>
 
       <Card>
         <div className="flex gap-2">
@@ -257,6 +361,8 @@ export default function ImitatePage() {
             </div>
           )}
         </Card>
+      )}
+      </>
       )}
     </div>
   );

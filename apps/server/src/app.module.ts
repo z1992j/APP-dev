@@ -16,6 +16,7 @@ import { ImitateModule } from './imitate/imitate.module';
 import { AutomationModule } from './automation/automation.module';
 import { QueueModule } from './queue/queue.module';
 import { CommentsModule } from './comments/comments.module';
+import { DmModule } from './dm/dm.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { CommentsModule } from './comments/comments.module';
     AutomationModule,
     QueueModule,
     CommentsModule,
+    DmModule,
   ],
 })
 export class AppModule {}

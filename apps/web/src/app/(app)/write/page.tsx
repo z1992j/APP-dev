@@ -6,6 +6,7 @@ import { Card, CardTitle } from '@/components/ui/card';
 import { Input, Textarea } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Api, streamSSE } from '@/lib/api';
+import { useAccountStore } from '@/lib/account-store';
 import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +27,7 @@ function WritePageInner() {
   const router = useRouter();
   const sp = useSearchParams();
   const [topic, setTopic] = useState(sp.get('topic') ?? '');
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const { accounts, activeId, setAccounts } = useAccountStore();
   const [selected, setSelected] = useState<string[]>([]);
   const [style, setStyle] = useState<string>(STYLES[0]);
   const [words, setWords] = useState<number>(WORDS[1]);
@@ -37,7 +38,7 @@ function WritePageInner() {
     Api.listAccounts()
       .then((list) => {
         setAccounts(list);
-        if (list.length > 0) setSelected([list[0].id]);
+        if (list.length > 0) setSelected(activeId ? [activeId] : [list[0].id]);
         else {
           toast('请先创建至少一个账号档案', 'info');
           router.push('/accounts');

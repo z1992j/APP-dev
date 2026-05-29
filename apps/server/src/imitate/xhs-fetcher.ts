@@ -4,6 +4,7 @@
 // in production a worker downloads them to COS for stable serving.
 
 import axios from 'axios';
+import { lookup } from 'dns/promises';
 
 export interface RefNoteParsed {
   url: string;
@@ -17,11 +18,38 @@ const ALLOWED_HOSTS = ['xiaohongshu.com', 'www.xiaohongshu.com', 'xhslink.com'];
 const UA =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15';
 
+const PRIVATE_RANGES = [
+  /^127\./,
+  /^10\./,
+  /^172\.(1[6-9]|2[0-9]|3[01])\./,
+  /^192\.168\./,
+  /^169\.254\./,
+  /^0\./,
+  /^::1$/,
+  /^fc/i,
+  /^fd/i,
+  /^fe80/i,
+];
+
+function isPrivateIp(ip: string): boolean {
+  return PRIVATE_RANGES.some((r) => r.test(ip));
+}
+
+async function assertPublicHost(hostname: string): Promise<void> {
+  const { address } = await lookup(hostname);
+  if (isPrivateIp(address)) {
+    throw new Error('目标地址不允许访问（内网地址）');
+  }
+}
+
 export async function fetchReferenceNote(url: string): Promise<RefNoteParsed> {
   const u = new URL(url);
   if (!ALLOWED_HOSTS.includes(u.hostname)) {
     throw new Error('请粘贴 xiaohongshu.com / xhslink.com 的链接');
   }
+
+  await assertPublicHost(u.hostname);
+
   let finalUrl = url;
   let html: string;
   try {
@@ -32,14 +60,36 @@ export async function fetchReferenceNote(url: string): Promise<RefNoteParsed> {
         'Accept-Language': 'zh-CN,zh;q=0.9',
       },
       timeout: 8000,
-      maxRedirects: 5,
+      maxRedirects: 0,
       transformResponse: (r) => r,
-      validateStatus: (s) => s < 500,
+      validateStatus: (s) => s >= 200 && s < 400,
     });
     html = res.data;
     finalUrl = res.request?.res?.responseUrl ?? url;
-  } catch (e) {
-    throw new Error('参考帖无法访问，可能已被删除或私密');
+  } catch (e: any) {
+    if (e.response?.status >= 300 && e.response?.status < 400) {
+      const location = e.response.headers?.location;
+      if (location) {
+        const redir = new URL(location, url);
+        if (!ALLOWED_HOSTS.includes(redir.hostname)) {
+          throw new Error('重定向目标不在允许列表中');
+        }
+        await assertPublicHost(redir.hostname);
+        const res2 = await axios.get<string>(redir.toString(), {
+          headers: { 'User-Agent': UA },
+          timeout: 8000,
+          maxRedirects: 0,
+          transformResponse: (r) => r,
+          validateStatus: (s) => s < 500,
+        });
+        html = res2.data;
+        finalUrl = redir.toString();
+      } else {
+        throw new Error('参考帖无法访问，可能已被删除或私密');
+      }
+    } else {
+      throw new Error('参考帖无法访问，可能已被删除或私密');
+    }
   }
 
   const meta = (name: string) => {

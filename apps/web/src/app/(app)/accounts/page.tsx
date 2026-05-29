@@ -13,10 +13,18 @@ const VERTICALS = ['穿搭', '美妆', '母婴', '美食', '通用'];
 export default function AccountsPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [editing, setEditing] = useState<any | null>(null);
+  const [statuses, setStatuses] = useState<Record<string, { status: string; workerHealth: string; lastUsedAt: string | null }>>({});
 
   async function reload() {
     try {
-      setAccounts(await Api.listAccounts());
+      const accs = await Api.listAccounts();
+      setAccounts(accs);
+      try {
+        const s = await Api.autoBatchStatus();
+        setStatuses(s);
+      } catch {
+        // automation may not be available
+      }
     } catch (e: any) {
       toast(e?.message ?? '加载失败', 'error');
     }
@@ -40,35 +48,47 @@ export default function AccountsPage() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {accounts.map((a) => (
+          {accounts.map((a) => {
+            const st = statuses[a.id];
+            const isOnline = st?.status === 'active' && st?.workerHealth === 'healthy';
+            const statusText = st ? sessionLabel(st.status) : '未绑定';
+            return (
             <Card key={a.id} className="hover:shadow-md transition-shadow">
               <div className="flex items-center justify-between mb-2">
-                <button onClick={() => setEditing(a)} className="font-semibold text-left">
-                  {a.nickname}
-                </button>
+                <div className="flex items-center gap-2">
+                  <span className={`inline-block w-2.5 h-2.5 rounded-full ${isOnline ? 'bg-emerald-500' : st?.status === 'needs_bind' || !st ? 'bg-ink-300' : 'bg-amber-400'}`} />
+                  <button onClick={() => setEditing(a)} className="font-semibold text-left">
+                    {a.nickname}
+                  </button>
+                </div>
                 <span className="text-xs px-2 py-0.5 bg-ink-100/60 rounded">
                   {a.vertical ?? '未设置'}
                 </span>
               </div>
+              <div className="text-xs text-ink-500 mb-1">{statusText}</div>
               {a.persona?.intro && (
                 <div className="text-sm text-ink-500 line-clamp-2 mb-3">{a.persona.intro}</div>
+              )}
+              {st?.lastUsedAt && (
+                <div className="text-xs text-ink-400 mb-2">最后活跃: {new Date(st.lastUsedAt).toLocaleString('zh-CN')}</div>
               )}
               <div className="flex gap-2 pt-2 border-t border-ink-100">
                 <a
                   href={`/accounts/${a.id}/bind`}
                   className="text-xs text-brand-500 hover:underline"
                 >
-                  🔗 绑定 / 自动化
+                  {isOnline ? '管理自动化' : '绑定 / 自动化'}
                 </a>
                 <button
                   onClick={() => setEditing(a)}
                   className="text-xs text-ink-500 hover:text-ink-900"
                 >
-                  ⚙️ 编辑档案
+                  编辑档案
                 </button>
               </div>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -211,4 +231,17 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       {children}
     </div>
   );
+}
+
+function sessionLabel(s: string): string {
+  switch (s) {
+    case 'needs_bind': return '未绑定';
+    case 'needs_login': return '未登录';
+    case 'qrcode_ready': return '等待扫码';
+    case 'active': return '在线';
+    case 'challenged': return '需要验证';
+    case 'banned': return '已封号';
+    case 'stopped': return '已停止';
+    default: return s;
+  }
 }

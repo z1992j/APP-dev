@@ -31,9 +31,10 @@ export class CommentsController {
     @CurrentUser() u: JwtPayload,
     @Query('status') status?: string,
     @Query('accountId') accountId?: string,
+    @Query('sentiment') sentiment?: string,
     @Query('cursor') cursor?: string,
   ) {
-    return this.svc.list(BigInt(u.teamId), { status, accountId, cursor });
+    return this.svc.list(BigInt(u.teamId), { status, accountId, sentiment, cursor });
   }
 
   @Get('stats')

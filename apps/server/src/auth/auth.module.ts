@@ -10,10 +10,18 @@ import { JwtGuard } from '../common/guards/jwt.guard';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: (cfg: ConfigService) => ({
-        secret: cfg.get<string>('JWT_SECRET') ?? 'dev-secret',
-        signOptions: { expiresIn: cfg.get<string>('JWT_EXPIRES_IN') ?? '7d' },
-      }),
+      useFactory: (cfg: ConfigService) => {
+        const secret = cfg.get<string>('JWT_SECRET');
+        if (!secret || secret.length < 32) {
+          throw new Error(
+            'JWT_SECRET must be set and >= 32 characters. Generate one: openssl rand -hex 32',
+          );
+        }
+        return {
+          secret,
+          signOptions: { expiresIn: cfg.get<string>('JWT_EXPIRES_IN') ?? '7d' },
+        };
+      },
     }),
   ],
   controllers: [AuthController],

@@ -39,13 +39,14 @@ export class CommentsService {
   // ── 列表与单条 ─────────────────────────────────────────────────────
   async list(
     teamId: bigint,
-    filter: { status?: string; accountId?: string; cursor?: string },
+    filter: { status?: string; accountId?: string; sentiment?: string; cursor?: string },
   ) {
     const items = await this.prisma.xhsComment.findMany({
       where: {
         teamId,
         ...(filter.status ? { status: filter.status } : {}),
         ...(filter.accountId ? { accountId: BigInt(filter.accountId) } : {}),
+        ...(filter.sentiment ? { sentiment: filter.sentiment } : {}),
         ...(filter.cursor ? { id: { lt: BigInt(filter.cursor) } } : {}),
       },
       orderBy: { id: 'desc' },

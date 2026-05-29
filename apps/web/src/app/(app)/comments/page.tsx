@@ -28,6 +28,8 @@ export default function CommentsPage() {
   const [replyOpen, setReplyOpen] = useState<any | null>(null);
   const [replyText, setReplyText] = useState('');
   const [rulesOpen, setRulesOpen] = useState(false);
+  const [groupByNote, setGroupByNote] = useState(true);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
 
   async function reload(reset = true) {
     setLoading(true);
@@ -92,15 +94,67 @@ export default function CommentsPage() {
     }
   }
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function batchIgnore() {
+    if (selected.size === 0) return;
+    try {
+      await Promise.all([...selected].map((id) => Api.ignoreComment(id)));
+      toast(`已忽略 ${selected.size} 条`, 'success');
+      setSelected(new Set());
+      await reload();
+    } catch (e: any) {
+      toast(e?.message ?? '批量操作失败', 'error');
+    }
+  }
+
+  async function batchAutoReply() {
+    if (selected.size === 0) return;
+    try {
+      await Promise.all([...selected].map((id) => Api.autoReplyComment(id)));
+      toast(`已为 ${selected.size} 条触发自动回复`, 'success');
+      setSelected(new Set());
+      await reload();
+    } catch (e: any) {
+      toast(e?.message ?? '批量操作失败', 'error');
+    }
+  }
+
+  const grouped = groupByNote
+    ? items.reduce<Record<string, any[]>>((acc, c) => {
+        const key = c.noteUrl || c.noteId || 'unknown';
+        (acc[key] ??= []).push(c);
+        return acc;
+      }, {})
+    : null;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">评论</h1>
         <div className="flex gap-2">
-          <Button variant="ghost" onClick={onSweep}>🔄 立即扫描</Button>
-          <Button variant="outline" onClick={() => setRulesOpen(true)}>⚙️ 自动回复规则</Button>
+          <Button variant="ghost" onClick={() => setGroupByNote(!groupByNote)}>
+            {groupByNote ? '平铺' : '按笔记分组'}
+          </Button>
+          <Button variant="ghost" onClick={onSweep}>立即扫描</Button>
+          <Button variant="outline" onClick={() => setRulesOpen(true)}>自动回复规则</Button>
         </div>
       </div>
+
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 bg-brand-50 border border-brand-200 rounded-lg px-4 py-2">
+          <span className="text-sm text-brand-700">已选 {selected.size} 条</span>
+          <Button size="sm" onClick={batchAutoReply}>批量自动回复</Button>
+          <Button size="sm" variant="outline" onClick={batchIgnore}>批量忽略</Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>取消选择</Button>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Stat label="新评论" value={stats?.new ?? 0} tone="text-amber-700" />
@@ -133,55 +187,31 @@ export default function CommentsPage() {
             </p>
           </div>
         </Card>
+      ) : groupByNote && grouped ? (
+        <div className="space-y-4">
+          {Object.entries(grouped).map(([noteKey, comments]) => (
+            <Card key={noteKey}>
+              <div className="flex items-center gap-2 mb-3 pb-2 border-b border-ink-100">
+                <span className="text-sm font-medium truncate flex-1">
+                  {noteKey !== 'unknown' ? (
+                    <a href={noteKey} target="_blank" rel="noreferrer" className="text-brand-500 hover:underline">{noteKey}</a>
+                  ) : '未知笔记'}
+                </span>
+                <span className="text-xs text-ink-500">{comments.length} 条评论</span>
+              </div>
+              <div className="space-y-3">
+                {comments.map((c: any) => (
+                  <CommentRow key={c.id} c={c} selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)} onReply={() => setReplyOpen(c)} onAutoReply={() => onAutoReply(c.id)} onIgnore={() => onIgnore(c.id)} />
+                ))}
+              </div>
+            </Card>
+          ))}
+        </div>
       ) : (
         <div className="space-y-3">
           {items.map((c) => (
             <Card key={c.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-sm">
-                    <span className="font-medium">{c.authorName}</span>
-                    <span className="text-ink-500 text-xs">{fmtDateTime(c.publishedAt)}</span>
-                    <a
-                      className="text-brand-500 text-xs hover:underline truncate max-w-[200px]"
-                      href={c.noteUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      原帖 ↗
-                    </a>
-                  </div>
-                  <div className="mt-2 text-sm whitespace-pre-wrap leading-6">{c.content}</div>
-                  {c.reply && (
-                    <div className="mt-2 px-3 py-2 bg-emerald-50 border-l-2 border-emerald-300 text-xs rounded-r">
-                      <span className="text-emerald-700 font-medium">我方回复：</span>
-                      {c.reply}
-                    </div>
-                  )}
-                </div>
-                <span
-                  className={cn(
-                    'text-xs px-2 py-0.5 rounded shrink-0',
-                    STATUSES.find((s) => s.key === c.status)?.tone ?? 'bg-ink-100/60',
-                  )}
-                >
-                  {STATUSES.find((s) => s.key === c.status)?.label ?? c.status}
-                </span>
-              </div>
-
-              {c.status === 'new' || c.status === 'flagged' ? (
-                <div className="flex gap-2 mt-3 pt-3 border-t border-ink-100">
-                  <Button size="sm" onClick={() => setReplyOpen(c)}>
-                    手动回复
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => onAutoReply(c.id)}>
-                    匹配规则自动回
-                  </Button>
-                  <Button size="sm" variant="outline" onClick={() => onIgnore(c.id)}>
-                    忽略
-                  </Button>
-                </div>
-              ) : null}
+              <CommentRow c={c} selected={selected.has(c.id)} onToggle={() => toggleSelect(c.id)} onReply={() => setReplyOpen(c)} onAutoReply={() => onAutoReply(c.id)} onIgnore={() => onIgnore(c.id)} />
             </Card>
           ))}
         </div>
@@ -225,6 +255,48 @@ export default function CommentsPage() {
       </Sheet>
 
       <RulesSheet open={rulesOpen} onClose={() => setRulesOpen(false)} />
+    </div>
+  );
+}
+
+function CommentRow({ c, selected, onToggle, onReply, onAutoReply, onIgnore }: {
+  c: any; selected: boolean; onToggle: () => void; onReply: () => void; onAutoReply: () => void; onIgnore: () => void;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      {(c.status === 'new' || c.status === 'flagged') && (
+        <input type="checkbox" checked={selected} onChange={onToggle} className="mt-1.5 shrink-0" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2 text-sm">
+          <span className="font-medium">{c.authorName}</span>
+          <span className="text-ink-500 text-xs">{fmtDateTime(c.publishedAt)}</span>
+          <span className={cn('text-xs px-2 py-0.5 rounded', STATUSES.find((s) => s.key === c.status)?.tone ?? 'bg-ink-100/60')}>
+            {STATUSES.find((s) => s.key === c.status)?.label ?? c.status}
+          </span>
+          {c.sentiment && (
+            <span className={cn('text-xs px-2 py-0.5 rounded',
+              c.sentiment === 'positive' ? 'bg-emerald-100 text-emerald-700' :
+              c.sentiment === 'negative' ? 'bg-red-100 text-red-700' : 'bg-ink-100/60 text-ink-600',
+            )}>
+              {c.sentiment === 'positive' ? '正面' : c.sentiment === 'negative' ? '负面' : '中性'}
+            </span>
+          )}
+        </div>
+        <div className="mt-1 text-sm whitespace-pre-wrap leading-6">{c.content}</div>
+        {c.reply && (
+          <div className="mt-2 px-3 py-2 bg-emerald-50 border-l-2 border-emerald-300 text-xs rounded-r">
+            <span className="text-emerald-700 font-medium">回复：</span>{c.reply}
+          </div>
+        )}
+        {(c.status === 'new' || c.status === 'flagged') && (
+          <div className="flex gap-2 mt-2">
+            <Button size="sm" onClick={onReply}>回复</Button>
+            <Button size="sm" variant="ghost" onClick={onAutoReply}>自动回</Button>
+            <Button size="sm" variant="outline" onClick={onIgnore}>忽略</Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
