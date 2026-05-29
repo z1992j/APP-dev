@@ -1,9 +1,10 @@
 # RedMatrix — 小红书矩阵协作工作台
 
-[![CI](https://github.com/z1992j/APP-dev/actions/workflows/ci.yml/badge.svg)](https://github.com/z1992j/APP-dev/actions/workflows/ci.yml)
-[![Images](https://github.com/z1992j/APP-dev/actions/workflows/build-images.yml/badge.svg)](https://github.com/z1992j/APP-dev/actions/workflows/build-images.yml)
+[![CI](https://github.com/z1992j/RedMatrix/actions/workflows/ci.yml/badge.svg)](https://github.com/z1992j/RedMatrix/actions/workflows/ci.yml)
+[![Images](https://github.com/z1992j/RedMatrix/actions/workflows/build-images.yml/badge.svg)](https://github.com/z1992j/RedMatrix/actions/workflows/build-images.yml)
 
-面向小红书博主与轻量 MCN 的 **AI 协作 + AI 仿写 + 多账号自动化发布** 工作台。
+面向小红书博主与轻量 MCN 的 **AI 内容生产 + 多账号自动化运营 + 矩阵协作** 全栈工作台。
+
 基于开源 [xpzouying/xiaohongshu-mcp](https://github.com/xpzouying/xiaohongshu-mcp)（MIT）做账号沙盒；每账号独立 Docker 容器、独立 cookie 卷、独立代理 IP，互不关联。
 
 ## 仓库结构
@@ -11,43 +12,88 @@
 ```
 .
 ├── apps/
-│   ├── server/        NestJS + Prisma + PostgreSQL 主后端
-│   └── web/           Next.js 15 网页端（主形态）
-├── deploy/            docker-compose（本地 / 生产 / xhs-mcp worker 模板）
-├── docs/              产品 PRD / 设计 / 调研文档
+│   ├── server/        NestJS 10 + Prisma 5 + PostgreSQL + BullMQ 后端
+│   └── web/           Next.js 15 + React 19 + Tailwind 网页端
+├── deploy/            docker-compose（本地 / 生产 / xhs-mcp worker）
+├── docs/              PRD / 详设 / 调研文档
 ├── .github/workflows/ CI（e2e + build + worker smoke）+ GHCR 镜像
 └── .devcontainer/     Codespaces 一键开发环境
 ```
 
-## 🚀 启动
+## 技术栈
 
-### 方式一：Codespaces（零配置，推荐快速测试）
+| 层 | 技术 |
+|---|------|
+| 前端 | Next.js 15 · React 19 · Zustand · TanStack Query · Tailwind CSS |
+| 后端 | NestJS 10 · Prisma 5 · PostgreSQL · Redis · BullMQ |
+| AI | DeepSeek-v4-pro（Anthropic SDK 兼容网关）· 流式 SSE |
+| 自动化 | xhs-mcp（Go + go-rod）· 每账号独立 Docker 容器 |
+| CI/CD | GitHub Actions → GHCR 镜像 → docker-compose 部署 |
 
-**1. 先在 GitHub 设好 Secret（一次性）**
+## 页面导航
 
-打开 https://github.com/settings/codespaces → **New secret** → 名字 `DEEPSEEK_API_KEY`、值填你的 DeepSeek key → Repository access 选本仓库。可选：`JWT_SECRET`（不填 setup.sh 也会用 .env.example 里的开发占位）。
+| 路由 | 页面 | 说明 |
+|------|------|------|
+| `/inspire` | 灵感选题 | AI 生成 10 角度 + 粘贴 XHS 链接收藏 |
+| `/write` | AI 写作 | DeepSeek 流式生成 · 多账号 fan-out · prompt 缓存 |
+| `/imitate` | 一键仿写 | 单条 + 批量模式 · 粘 URL → 解析 → AI 改写 → 草稿 |
+| `/drafts` | 草稿管理 | 状态机 · 排期 · 违禁词检查 · 图片管理 · 封面选择 |
+| `/comments` | 评论管理 | 自动抓取 · 按笔记分组 · 批量操作 · AI/模板回复 · 情感分析 |
+| `/dm` | 私信 | 会话列表 · 聊天窗口 · AI 建议回复 · 归档 |
+| `/data` | 数据看板 | 趋势柱状图（7/30/90天）· 每日填报 · 矩阵汇总 |
+| `/accounts` | 账号档案 | 人设管理 · 在线状态指示 · 绑定自动化 |
+| `/workers` | Worker 监控 | Docker 状态 · 容器健康 · 端口/配额/活跃时间 |
+| `/team` | 团队 | 邀请 · 角色权限（owner/admin/editor/reviewer/viewer）|
+| `/billing` | 订阅计费 | 套餐展示（支付接入中）|
+| `/settings` | 设置 | 协议中心 |
 
-**2. 仓库右上角 Code → Codespaces → Create codespace on main**
+## 功能
 
-约 3 分钟后 `.devcontainer/setup.sh` 自动完成：装依赖、起 Postgres+Redis、prisma migrate + seed、注入 Secret。
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| 登录 / JWT / 多团队 | ✅ | dev 模式 + 微信 OAuth 框架 · httpOnly cookie 认证 |
+| 账号档案 + 人设 | ✅ | persona 喂 AI · 全局账号切换器 · 在线状态 |
+| 灵感选题 | ✅ | LLM 10 角度 + 链接 oembed |
+| AI 写作 | ✅ | DeepSeek 流式 · 多账号 fan-out · prompt 缓存 |
+| AI 仿写 | ✅ | 单条 + **批量模式**（多 URL 并行） |
+| 违禁词检测 | ✅ | Trie 引擎 + 三层框架 |
+| 草稿 + 排期 | ✅ | 状态机 · cron 扫描 · **图片管理 + 封面选择** |
+| xhs-mcp 自动化 | ✅ | 扫码登录 · 自动发布 · 每账号 Docker 沙盒 |
+| 评论管理 | ✅ | 15 分钟自动抓取 · **按笔记分组** · **批量操作** · AI/模板回复 · **情感分析** |
+| 私信 | ✅ | 会话列表 · 聊天窗口 · **AI 建议回复** · 归档（数据结构就绪，xhs-mcp 扩展中）|
+| 数据看板 | ✅ | **趋势柱状图** · 7/30/90 天切换 · 矩阵汇总 |
+| Worker 监控 | ✅ | Docker 可用性 · 容器健康 · 端口/配额/活跃时间 |
+| 审稿协作 | ✅ | owner / admin / editor / reviewer / viewer 五级角色 |
+| 团队邀请 | ✅ | 邀请码 + 角色管理 |
+| 协议中心 | ✅ | 用户 / 隐私 / 订阅 |
 
-**3. 在 Codespace 终端里起两个进程**
+## 安全加固
+
+| 项目 | 措施 |
+|------|------|
+| JWT | 启动时校验 `JWT_SECRET` ≥ 32 字符，否则拒绝启动 |
+| CORS | 白名单模式，`CORS_ORIGINS` 环境变量配置 |
+| SSRF | URL 解析后 DNS 校验私网 IP · 禁止自动重定向 |
+| Docker | 支持 TCP API（`DOCKER_HOST` 环境变量）· 不强依赖 socket 挂载 |
+| 容器 | 非 root 用户运行（`appuser`）|
+| Token | httpOnly cookie · 同时兼容 Bearer header |
+| HTTP 头 | Helmet 中间件 |
+
+## 启动
+
+### Codespaces（零配置）
+
+1. GitHub Settings → Codespaces → New secret → `DEEPSEEK_API_KEY`
+2. 仓库 Code → Codespaces → Create codespace on main
+3. 终端分两个 tab：
+   ```bash
+   cd apps/server && pnpm dev    # NestJS :3000
+   cd apps/web && pnpm dev       # Next.js :3001
+   ```
+
+### 阿里云 ECS（生产部署）
 
 ```bash
-# Tab 1
-cd apps/server && pnpm dev          # NestJS @ :3000
-
-# Tab 2
-cd apps/web && pnpm dev             # Next.js @ :3001
-```
-
-VS Code 底部 **PORTS** 标签里 3001 会自动转公网预览 URL（`https://<codespace-name>-3001.app.github.dev`）。点 🌐 图标在浏览器打开 → `/login` → 任意 dev code（如 `dev-alice`）→ 进 `/inspire` 工作台。
-
-### 方式二：自有服务器拉镜像（推荐生产）
-
-```bash
-docker login ghcr.io -u <your-github-user>
-
 cd deploy
 cat > .env <<EOF
 DEEPSEEK_API_KEY=sk-...
@@ -55,87 +101,71 @@ DEEPSEEK_BASE_URL=https://api.deepseek.com/anthropic
 DEEPSEEK_MODEL=deepseek-v4-pro
 JWT_SECRET=$(openssl rand -hex 32)
 PG_PASSWORD=$(openssl rand -hex 16)
-WX_APPID=                           # 网页 OAuth 暂未必填
-WX_SECRET=
-PUBLIC_API_BASE=http://<your-host>:3000
-GH_OWNER=z1992j
+CORS_ORIGINS=https://your-domain.com
+PUBLIC_API_BASE=https://your-domain.com
 EOF
 
 docker compose -f docker-compose.prod.yml up -d
-
-# 试一个 xhs-mcp worker（每账号一容器）
-./test-worker.sh 1 18001 [可选代理 URL]
 ```
 
-## 🔑 登录
+### 环境变量
 
-部署后打开浏览器：
+| 变量 | 必须 | 说明 |
+|------|------|------|
+| `JWT_SECRET` | 是 | ≥ 32 字符，`openssl rand -hex 32` |
+| `DATABASE_URL` | 是 | PostgreSQL 连接串 |
+| `REDIS_URL` | 是 | Redis 连接串 |
+| `DEEPSEEK_API_KEY` | 是 | DeepSeek API Key |
+| `CORS_ORIGINS` | 否 | 允许跨域来源，逗号分隔 |
+| `DOCKER_HOST` | 否 | Docker TCP 地址，如 `tcp://127.0.0.1:2375` |
+| `WX_APPID` / `WX_SECRET` | 否 | 微信 OAuth（生产需要）|
 
-```
-http://<your-host>:3001/login
-```
+## CI
 
-Dev 模式（无微信 AppID 也可）：
+每次 push 触发三个并行 job：
 
-1. 输入任意标识（如 `alice`）
-2. 后端会自动建用户 + 个人团队
-3. 跳到 `/inspire` 工作台
+1. **Server e2e** — Postgres + Redis → migrate + seed + build → 28 项断言
+2. **Web** — typecheck + 17 路由 production build
+3. **xhs-mcp Worker** — 拉镜像 + 启容器 + 验 `/health`
 
-后续生产：填入 `WX_APPID` / `WX_SECRET` 接入微信扫码 OAuth。
-
-## ✅ 功能
-
-| 模块 | 状态 | 备注 |
-|---|---|---|
-| 登录 / JWT / 多团队切换 | ✅ | dev 模式 + 微信 OAuth 框架 |
-| 账号档案 + 人设 + 套餐配额 | ✅ | persona 字段喂 AI |
-| 灵感选题 | ✅ | LLM 生成 10 角度 + 粘贴 XHS 链接 oembed |
-| AI 写作 | ✅ | DeepSeek-v4-pro 流式（Anthropic SDK + 兼容网关）+ 多账号 fan-out |
-| **AI 仿写工作台** | ✅ | 粘 URL → 解析 → 按锁定提示词改写 → 草稿 |
-| 违禁词检测 | ✅ | Trie + 64 种子词 + 三层框架 |
-| 草稿 + 状态机 + 排期 | ✅ | draft → in_review → scheduled → handed_off → published |
-| 跳转小红书 | ✅ | 复制文案 + 跳 creator.xiaohongshu.com |
-| **xhs-mcp 自动化** | ✅ | 扫码登录 / 自动发布 / 评论 |
-| 每账号独立沙盒 | ✅ | Docker 容器 + 独立 cookie 卷 + 独立代理 IP |
-| 审稿协作 + 角色 | ✅ | owner / admin / editor / reviewer / viewer |
-| 团队邀请 / 切换 | ✅ | 多团队 JWT 切换 |
-| 数据填报 + 汇总 | ✅ | 每日 7 字段 + 矩阵看板 |
-| 协议中心 | ✅ | 用户 / 隐私 / 订阅 |
-| 排期 cron + 健康检查 | ✅ | 每分钟扫到期 |
-
-⏳ Phase 3+：评论自动浏览 + AI 回复 / 蓝 V 私信轮询 / 代理 IP 池健康检查 / BullMQ 错峰队列 / 微信支付。
-
-## ✅ CI
-
-每次 push 触发 [`ci.yml`](.github/workflows/ci.yml) 三个并行 job：
-
-1. **Server e2e**：Postgres + Redis service → migrate + seed + build + 启动 → 28 项断言（auth / 配额 / 草稿全状态机 / 团队邀请 / 切换 / 角色鉴权）
-2. **Web**：typecheck + 13 路由 production build
-3. **xhs-mcp Worker**：拉镜像 + 启容器 + 验 `/health` 与 `/api/v1/login/status`
-
-合并到 main 后 [`build-images.yml`](.github/workflows/build-images.yml) 推 GHCR：
+合并到 main 后推 GHCR 镜像：
 - `ghcr.io/z1992j/redmatrix-server:latest`
 - `ghcr.io/z1992j/redmatrix-web:latest`
 
 ## 端口
 
 | 服务 | 端口 |
-|---|---|
-| Postgres | 5432 |
+|------|------|
+| PostgreSQL | 5432 |
 | Redis | 6379 |
 | Server (NestJS) | 3000 |
 | Web (Next.js) | 3001 |
-| Worker 池（每账号一个） | 18000~18999 |
+| Worker 池 | 18000~18999 |
 
-## 风险提示（必读）
+## 数据模型
+
+20 张表，核心模型：
+
+- **User / Team / TeamMember** — 用户 + 团队 + 角色
+- **XhsAccount** — 账号档案（含 AI 人设 JSON）
+- **Draft / DraftReview** — 草稿 + 审稿
+- **XhsSession** — 浏览器自动化会话（6 态状态机）
+- **XhsComment / CommentRule** — 评论 + 自动回复规则（含情感分析）
+- **DmConversation / DmMessage / DmRule** — 私信会话 + 消息 + 规则
+- **DataPoint** — 数据填报（按日×账号去重）
+- **AiUsage** — AI 用量计费
+- **AuditLog** — 全链路操作审计
+
+## 风险提示
 
 **自动化能力在小红书 ToS 灰色地带**。即使有指纹+IP+节流，仍可能触发风控：
 
-- ✅ **只服务已养号 ≥30 天 + 粉丝 ≥1k 的蓝 V**，新号必死
+- ✅ 只服务已养号 ≥30 天 + 粉丝 ≥1k 的蓝 V，新号必死
 - ✅ 内置每账号日发帖 ≤3、最小间隔 30 分钟硬限
 - ✅ 用户协议明文「风险自担」+ 强实名
 - ❌ 不做刷量黑产 / 批量虚假账号 / 跨设备共号
-- 详见 [`docs/research/multi-account-automation.md`](docs/research/multi-account-automation.md)
+
+详见 [`docs/research/multi-account-automation.md`](docs/research/multi-account-automation.md)
 
 ## 致谢
 
